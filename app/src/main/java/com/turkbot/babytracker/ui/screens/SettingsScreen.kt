@@ -488,6 +488,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             val updateInfo by viewModel.updateInfo.collectAsState()
             val updateChecking by viewModel.updateChecking.collectAsState()
             val updateDownloading by viewModel.updateDownloading.collectAsState()
+            val updateMessage by viewModel.updateMessage.collectAsState()
             var autoUpdate by remember { mutableStateOf(viewModel.isAutoUpdateEnabled()) }
             var showUpdateDialog by remember { mutableStateOf(false) }
 
@@ -559,6 +560,15 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                 fontWeight = FontWeight.Medium
                             )
                         }
+                    } else if (updateMessage != null) {
+                        Text(
+                            updateMessage!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (updateMessage!!.startsWith("You're up to date"))
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else
+                                MaterialTheme.colorScheme.error
+                        )
                     } else {
                         Text(
                             "Last checked: tap \"Check Now\"",

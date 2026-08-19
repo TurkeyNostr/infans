@@ -311,13 +311,15 @@ class BabyViewModel(
     fun isAmberInstalled(): Boolean = nostr.isAmberInstalled()
 
     // ── App Update ─────────────────────────────────────
+    private val currentVersionName: String = try {
+        app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "1.0.0"
+    } catch (e: Exception) {
+        "1.0.0"
+    }
+
     private val updater = ForgejoUpdater(
         app,
-        currentVersionName = try {
-            app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "1.0.0"
-        } catch (e: Exception) {
-            "1.0.0"
-        }
+        currentVersionName = currentVersionName
     )
 
     private val _updateInfo = MutableStateFlow<ForgejoUpdater.UpdateInfo?>(null)
@@ -329,10 +331,27 @@ class BabyViewModel(
     private val _updateDownloading = MutableStateFlow(false)
     val updateDownloading: StateFlow<Boolean> = _updateDownloading
 
+    private val _updateMessage = MutableStateFlow<String?>(null)
+    val updateMessage: StateFlow<String?> = _updateMessage
+
     fun checkForUpdate() {
         viewModelScope.launch {
             _updateChecking.value = true
-            _updateInfo.value = updater.checkForUpdate()
+            _updateMessage.value = null
+            when (val result = updater.checkForUpdate()) {
+                is ForgejoUpdater.CheckResult.UpdateAvailable -> {
+                    _updateInfo.value = result.info
+                    _updateMessage.value = null
+                }
+                is ForgejoUpdater.CheckResult.UpToDate -> {
+                    _updateInfo.value = null
+                    _updateMessage.value = "You're up to date! (v$currentVersionName)"
+                }
+                is ForgejoUpdater.CheckResult.Error -> {
+                    _updateInfo.value = null
+                    _updateMessage.value = result.message
+                }
+            }
             _updateChecking.value = false
         }
     }
