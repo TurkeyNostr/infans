@@ -210,13 +210,15 @@ class NostrManager(context: Context) {
         val pm = appContext.packageManager
         // Method 1: getPackageInfo (works if <queries> declares the package)
         try {
+            @Suppress("DEPRECATION")
             pm.getPackageInfo("com.greenart7c3.amber", 0)
             return true
         } catch (_: Exception) {}
         // Method 2: getLaunchIntentForPackage (respects <queries> but more robust)
         if (pm.getLaunchIntentForPackage("com.greenart7c3.amber") != null) return true
-        // Method 3: resolve the NIP-55 GET_PUBKEY intent
+        // Method 3: resolve the NIP-55 GET_PUBKEY intent (must setPackage for Android 11+)
         val intent = android.content.Intent("com.greenart7c3.amber.GET_PUBKEY")
+            .setPackage("com.greenart7c3.amber")
         if (pm.resolveActivity(intent, 0) != null) return true
         return false
     }

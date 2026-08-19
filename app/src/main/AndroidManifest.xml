@@ -13,6 +13,12 @@
     <!-- Amber (NIP-55 signer) intent visibility — required on Android 11+ (API 30+) -->
     <queries>
         <package android:name="com.greenart7c3.amber" />
+        <intent>
+            <action android:name="com.greenart7c3.amber.GET_PUBKEY" />
+        </intent>
+        <intent>
+            <action android:name="com.greenart7c3.amber.SIGN_EVENT" />
+        </intent>
     </queries>
 
     <application
