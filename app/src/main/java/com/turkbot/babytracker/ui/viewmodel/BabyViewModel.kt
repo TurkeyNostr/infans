@@ -19,6 +19,7 @@ import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.reminder.ReminderScheduler
+import com.turkbot.babytracker.update.ForgejoUpdater
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -308,6 +309,51 @@ class BabyViewModel(
     }
 
     fun isAmberInstalled(): Boolean = nostr.isAmberInstalled()
+
+    // ── App Update ─────────────────────────────────────
+    private val updater = ForgejoUpdater(
+        app,
+        currentVersionName = try {
+            app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "1.0.0"
+        } catch (e: Exception) {
+            "1.0.0"
+        }
+    )
+
+    private val _updateInfo = MutableStateFlow<ForgejoUpdater.UpdateInfo?>(null)
+    val updateInfo: StateFlow<ForgejoUpdater.UpdateInfo?> = _updateInfo
+
+    private val _updateChecking = MutableStateFlow(false)
+    val updateChecking: StateFlow<Boolean> = _updateChecking
+
+    private val _updateDownloading = MutableStateFlow(false)
+    val updateDownloading: StateFlow<Boolean> = _updateDownloading
+
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            _updateChecking.value = true
+            _updateInfo.value = updater.checkForUpdate()
+            _updateChecking.value = false
+        }
+    }
+
+    fun downloadAndInstallUpdate() {
+        val info = _updateInfo.value ?: return
+        viewModelScope.launch {
+            _updateDownloading.value = true
+            val apkFile = updater.downloadApk(info)
+            _updateDownloading.value = false
+            if (apkFile != null) {
+                updater.installApk(apkFile)
+            }
+        }
+    }
+
+    fun isAutoUpdateEnabled(): Boolean = updater.isAutoUpdateEnabled()
+
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        updater.setAutoUpdateEnabled(enabled)
+    }
 
     fun sendDirectMessage(text: String, recipientNpub: String) {
         viewModelScope.launch { nostr.sendMessage(text, recipientNpub) }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -412,6 +413,155 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         }
                     }
                 }
+            }
+        }
+
+        // ─── App Update ───────────────────────────────────
+        item {
+            SectionHeader("App Updates")
+        }
+
+        item {
+            val updateInfo by viewModel.updateInfo.collectAsState()
+            val updateChecking by viewModel.updateChecking.collectAsState()
+            val updateDownloading by viewModel.updateDownloading.collectAsState()
+            var autoUpdate by remember { mutableStateOf(viewModel.isAutoUpdateEnabled()) }
+            var showUpdateDialog by remember { mutableStateOf(false) }
+
+            // Auto-check on screen entry if enabled
+            LaunchedEffect(Unit) {
+                if (viewModel.isAutoUpdateEnabled()) {
+                    viewModel.checkForUpdate()
+                }
+            }
+
+            // Show dialog when update found and auto-update is on
+            LaunchedEffect(updateInfo) {
+                if (updateInfo != null && autoUpdate) {
+                    showUpdateDialog = true
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Auto-Update",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Check Forgejo for new versions and install them automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Check automatically on launch")
+                        Switch(
+                            checked = autoUpdate,
+                            onCheckedChange = {
+                                autoUpdate = it
+                                viewModel.setAutoUpdateEnabled(it)
+                                if (it) viewModel.checkForUpdate()
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    if (updateChecking) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text("Checking for updates...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else if (updateInfo != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(
+                                Icons.Filled.SystemUpdate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                "Update v${updateInfo!!.versionName} available",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        Text(
+                            "Last checked: tap \"Check Now\"",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.checkForUpdate() },
+                            enabled = !updateChecking
+                        ) { Text("Check Now") }
+                        if (updateInfo != null) {
+                            Button(
+                                onClick = { showUpdateDialog = true },
+                                enabled = !updateDownloading
+                            ) {
+                                if (updateDownloading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Text("Download & Install")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update confirmation dialog
+            if (showUpdateDialog && updateInfo != null) {
+                AlertDialog(
+                    onDismissRequest = { showUpdateDialog = false },
+                    title = { Text("Update to v${updateInfo!!.versionName}") },
+                    text = {
+                        Column {
+                            Text(updateInfo!!.releaseName)
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                updateInfo!!.releaseNotes.take(500),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "The APK will be downloaded from your Forgejo server and installed.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showUpdateDialog = false
+                                viewModel.downloadAndInstallUpdate()
+                            }
+                        ) { Text("Download & Install") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showUpdateDialog = false }) { Text("Later") }
+                    }
+                )
             }
         }
 
