@@ -117,10 +117,11 @@ class NostrManager(context: Context) {
             }
             SignerMode.AMBER -> {
                 val npub = keyStore.getAmberNpub()
-                if (npub != null) {
+                val pkg = keyStore.getSignerPackage()
+                if (npub != null && pkg != null) {
                     val pubHex = npubToHex(npub)
                     if (pubHex != null) {
-                        val signer = AmberSigner(npub, pubHex)
+                        val signer = AmberSigner(npub, pubHex, pkg)
                         _signer.value = signer
                         connectAndSubscribe(signer)
                         // Refresh NIP-65 relays in background

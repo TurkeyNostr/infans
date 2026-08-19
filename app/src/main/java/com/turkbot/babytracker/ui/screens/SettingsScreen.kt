@@ -197,12 +197,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                             }
                                         }
                                     } else {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/i/com.greenart7c3.amber/"))
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/apps/com.greenart7c3.amber"))
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from Zapstore: zapstore.dev/i/com.greenart7c3.amber"
+                                            amberError = "Install Amber from Zapstore: zapstore.dev/apps/com.greenart7c3.amber"
                                         }
                                     }
                                 },
@@ -260,12 +260,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                             }
                                         }
                                     } else {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/i/com.greenart7c3.amber/"))
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/apps/com.greenart7c3.amber"))
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from Zapstore: zapstore.dev/i/com.greenart7c3.amber"
+                                            amberError = "Install Amber from Zapstore: zapstore.dev/apps/com.greenart7c3.amber"
                                         }
                                     }
                                 },
