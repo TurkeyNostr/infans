@@ -95,7 +95,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text("Baby Tracker") },
+                title = { Text("Infans") },
                 actions = {
                     IconButton(onClick = {
                         navController.navigate("settings") {

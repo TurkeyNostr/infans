@@ -29,7 +29,7 @@ class RelaySyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIF_ID, buildNotification("Baby Tracker — syncing"))
+        startForeground(NOTIF_ID, buildNotification("Infans — syncing"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -43,7 +43,7 @@ class RelaySyncService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Baby Tracker Sync",
+                "Infans Sync",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Keeps Nostr relay connection alive for messages"
@@ -54,7 +54,7 @@ class RelaySyncService : Service() {
 
     private fun buildNotification(text: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Baby Tracker")
+            .setContentTitle("Infans")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)

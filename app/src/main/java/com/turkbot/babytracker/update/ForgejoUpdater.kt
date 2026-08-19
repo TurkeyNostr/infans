@@ -152,7 +152,7 @@ class ForgejoUpdater(
                         CheckResult.UpdateAvailable(
                             UpdateInfo(
                                 versionName = versionName,
-                                releaseName = release.optString("name", "Baby Tracker v$versionName"),
+                                releaseName = release.optString("name", "Infans v$versionName"),
                                 downloadUrl = downloadUrl,
                                 releaseNotes = release.optString("body", ""),
                                 fileSize = asset.optLong("size", 0)

@@ -780,7 +780,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Baby Tracker",
+                        "Infans",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

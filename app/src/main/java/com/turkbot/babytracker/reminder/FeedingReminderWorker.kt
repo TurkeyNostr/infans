@@ -31,7 +31,7 @@ class FeedingReminderWorker(
 
     companion object {
         const val CHANNEL_ID = "baby_tracker_reminders"
-        const val CHANNEL_NAME = "Baby Tracker Reminders"
+        const val CHANNEL_NAME = "Infans Reminders"
         const val KEY_INTERVAL_MIN = "interval_minutes"
         const val WORK_NAME = "feeding_reminder"
     }
