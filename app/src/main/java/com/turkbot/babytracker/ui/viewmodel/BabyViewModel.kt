@@ -360,10 +360,14 @@ class BabyViewModel(
         val info = _updateInfo.value ?: return
         viewModelScope.launch {
             _updateDownloading.value = true
+            _updateMessage.value = "Downloading v${info.versionName}..."
             val apkFile = updater.downloadApk(info)
             _updateDownloading.value = false
             if (apkFile != null) {
+                _updateMessage.value = "Installing v${info.versionName}..."
                 updater.installApk(apkFile)
+            } else {
+                _updateMessage.value = "Download failed — check your network connection"
             }
         }
     }

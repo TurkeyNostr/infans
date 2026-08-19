@@ -214,6 +214,7 @@ class ForgejoUpdater(
     /**
      * Launch the system APK installer for the downloaded file.
      * Uses FileProvider to share the file with the installer.
+     * Requires REQUEST_INSTALL_PACKAGES permission (Android 8+).
      */
     fun installApk(apkFile: File) {
         val uri = FileProvider.getUriForFile(
@@ -222,13 +223,26 @@ class ForgejoUpdater(
             apkFile
         )
 
-        val intent = Intent(Intent.ACTION_VIEW).apply {
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Don't allow the installer to send back results — we just want it to install
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            putExtra(Intent.EXTRA_RETURN_RESULT, false)
         }
 
-        context.startActivity(intent)
+        try {
+            context.startActivity(intent)
+        } catch (e: android.content.ActivityNotFoundException) {
+            // Fallback: ACTION_VIEW (older devices or custom ROMs)
+            val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallbackIntent)
+        }
     }
 
     /**
