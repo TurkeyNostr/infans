@@ -19,6 +19,11 @@ import androidx.activity.result.ActivityResult
 import com.turkbot.babytracker.nostr.crypto.NostrSigner
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.events.NostrEvent
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * NIP-55 signer that delegates to an external Android signer app (e.g. Amber)
@@ -71,6 +76,38 @@ class AmberSigner(
         private const val METHOD_NIP44_ENCRYPT = "nip44_encrypt"
         private const val METHOD_NIP44_DECRYPT = "nip44_decrypt"
 
+        // Event kinds this app signs via the external signer:
+        //   13   — NIP-17 seals (gift-wrap DMs)
+        //   30078 — encrypted backups + partner sync
+        private const val KIND_SEAL = 13
+        private const val KIND_BACKUP = 30078
+
+        /**
+         * Scoped permissions sent with get_public_key so Amber only asks the user
+         * to approve the methods this app actually uses (not everything).
+         * Per NIP-55, each permission is {type, kind?}:
+         *   - sign_event with a kind narrows the signing permission to that kind
+         *   - nip44_encrypt / nip44_decrypt are blanket (no kind scoping)
+         */
+        private val SCOPED_PERMISSIONS: String = Json.encodeToString(
+            buildJsonArray {
+                add(buildJsonObject {
+                    put("type", METHOD_SIGN_EVENT)
+                    put("kind", KIND_SEAL)
+                })
+                add(buildJsonObject {
+                    put("type", METHOD_SIGN_EVENT)
+                    put("kind", KIND_BACKUP)
+                })
+                add(buildJsonObject {
+                    put("type", METHOD_NIP44_ENCRYPT)
+                })
+                add(buildJsonObject {
+                    put("type", METHOD_NIP44_DECRYPT)
+                })
+            }
+        )
+
         /**
          * Result of requesting pubkey from a NIP-55 signer.
          */
@@ -97,9 +134,11 @@ class AmberSigner(
             }
             return try {
                 // Per NIP-55: omit package for get_public_key so the user can
-                // pick which signer to use (if multiple are installed)
+                // pick which signer to use (if multiple are installed).
+                // Pass scoped permissions so the signer only asks for what we need.
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).apply {
                     putExtra(EXTRA_TYPE, METHOD_GET_PUBKEY)
+                    putExtra("permissions", SCOPED_PERMISSIONS)
                 }
                 val result = AmberBridge.launch(intent)
                 if (result.resultCode != -1) {  // Activity.RESULT_OK = -1
