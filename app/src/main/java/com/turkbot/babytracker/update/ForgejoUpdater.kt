@@ -22,60 +22,40 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
-import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.HostnameVerifier
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 /**
- * Checks Forgejo releases for a newer APK and downloads + installs it.
+ * Checks GitHub releases for a newer APK and downloads + installs it.
  *
- * The Forgejo API endpoint is:
- *   GET /api/v1/repos/{owner}/{repo}/releases?pre-release=false
+ * Uses the public GitHub REST API (no authentication required for public repos):
+ *   GET https://api.github.com/repos/{owner}/{repo}/releases/latest
  *
  * Each release has an "assets" array; we pick the first .apk asset.
+ * The asset's "browser_download_url" is a direct public download link.
  * Version comparison is by versionName (semantic versioning).
  */
 class ForgejoUpdater(
     private val context: Context,
-    private val apiBase: String = FORGEJO_API_BASE,
+    private val apiBase: String = GITHUB_API_BASE,
     private val currentVersionName: String
 ) {
 
     companion object {
-        // Forgejo API base for releases
-        private const val FORGEJO_API_BASE =
-            "https://192.168.1.172:54198/api/v1/repos/Turkey/baby-tracker-android/releases"
-        // Auth token for private repo access
-        private const val AUTH_TOKEN = "97c4d9d49e7c48f9d55b0e73a29baf9154359bde"
+        // GitHub public API — no auth token needed for public repos
+        private const val GITHUB_API_BASE =
+            "https://api.github.com/repos/TurkeyNostr/baby-tracker-android/releases"
 
         private const val PREFS_NAME = "baby_tracker_prefs"
         private const val KEY_AUTO_UPDATE = "auto_update_enabled"
     }
 
     /**
-     * OkHttp client that trusts the self-signed certificate on the
-     * local Forgejo server.  This is safe because we only connect to
-     * a known private-LAN address.
+     * Standard OkHttp client — GitHub uses valid public TLS certificates.
      */
     private val client: OkHttpClient by lazy {
-        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-        })
-
-        val sslContext = SSLContext.getInstance("TLS").apply {
-            init(null, trustAllCerts, java.security.SecureRandom())
-        }
-
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier(HostnameVerifier { _, _ -> true })
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
     }
 
@@ -98,41 +78,64 @@ class ForgejoUpdater(
     }
 
     /**
-     * Check the Forgejo releases API for a newer version.
+     * Check GitHub releases for a newer version.
+     * Tries /releases/latest first (most recent non-prerelease), then
+     * falls back to listing all releases and picking the first non-draft.
      */
     suspend fun checkForUpdate(): CheckResult = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url("$apiBase?pre-release=false")
-                .header("Authorization", "token $AUTH_TOKEN")
+            // Try the "latest" endpoint first (excludes prereleases)
+            var request = Request.Builder()
+                .url("$apiBase/latest")
+                .header("Accept", "application/vnd.github+json")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
+            var response = client.newCall(request).execute()
+            var body: String? = null
+
+            if (response.isSuccessful) {
+                body = response.body?.string()
+            } else if (response.code == 404) {
+                // No "latest" release (all are prereleases) — list all releases
+                response.close()
+                request = Request.Builder()
+                    .url("$apiBase?per_page=10")
+                    .header("Accept", "application/vnd.github+json")
+                    .build()
+                response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    body = response.body?.string()
+                }
+            }
+
+            if (body.isNullOrBlank()) {
                 return@withContext CheckResult.Error("Server returned HTTP ${response.code}")
             }
+            response.close()
 
-            val body = response.body?.string()
-                ?: return@withContext CheckResult.Error("Empty response from server")
-
-            val releasesArray = if (body.trimStart().startsWith("[")) {
-                org.json.JSONArray(body)
+            // Parse — either a single release object or an array
+            val releasesList = mutableListOf<JSONObject>()
+            if (body.trimStart().startsWith("[")) {
+                val arr = org.json.JSONArray(body)
+                for (i in 0 until arr.length()) {
+                    releasesList.add(arr.getJSONObject(i))
+                }
             } else {
-                org.json.JSONArray().put(JSONObject(body))
+                releasesList.add(JSONObject(body))
             }
 
-            if (releasesArray.length() == 0) {
+            if (releasesList.isEmpty()) {
                 return@withContext CheckResult.UpToDate
             }
 
             // Find the latest non-draft, non-prerelease release with an APK
-            for (i in 0 until releasesArray.length()) {
-                val release = releasesArray.getJSONObject(i)
+            for (release in releasesList) {
                 if (release.optBoolean("draft", false)) continue
                 if (release.optBoolean("prerelease", false)) continue
 
                 val tagName = release.optString("tag_name", "")
                 val versionName = tagName.removePrefix("v")
+                if (versionName.isBlank()) continue
 
                 val assets = release.optJSONArray("assets") ?: continue
                 for (j in 0 until assets.length()) {
@@ -140,12 +143,8 @@ class ForgejoUpdater(
                     val filename = asset.optString("name", "")
                     if (!filename.endsWith(".apk")) continue
 
-                    // Forgejo serves the download via api_download_url (needs auth)
-                    // or browser_download_url (public). Prefer api_download_url.
-                    val downloadUrl = asset.optString(
-                        "api_download_url",
-                        asset.optString("browser_download_url", "")
-                    )
+                    // GitHub's browser_download_url is a direct public CDN link — no auth needed
+                    val downloadUrl = asset.optString("browser_download_url", "")
                     if (downloadUrl.isBlank()) continue
 
                     return@withContext if (isVersionNewer(versionName, currentVersionName)) {
@@ -164,10 +163,8 @@ class ForgejoUpdater(
                 }
             }
             CheckResult.UpToDate
-        } catch (e: javax.net.ssl.SSLException) {
-            CheckResult.Error("SSL error: ${e.message}")
         } catch (e: java.net.UnknownHostException) {
-            CheckResult.Error("Cannot reach server (unknown host)")
+            CheckResult.Error("Cannot reach GitHub (no network)")
         } catch (e: java.net.SocketTimeoutException) {
             CheckResult.Error("Connection timed out — check your network")
         } catch (e: java.net.ConnectException) {
@@ -184,16 +181,17 @@ class ForgejoUpdater(
     suspend fun downloadApk(updateInfo: UpdateInfo): File? = withContext(Dispatchers.IO) {
         try {
             val updatesDir = File(context.filesDir, "updates").apply { mkdirs() }
-            val apkFile = File(updatesDir, "baby-tracker-update-${updateInfo.versionName}.apk")
+            val apkFile = File(updatesDir, "infans-update-${updateInfo.versionName}.apk")
 
-            // If already downloaded, reuse
+            // If already downloaded and size matches, reuse
             if (apkFile.exists() && apkFile.length() == updateInfo.fileSize) {
                 return@withContext apkFile
             }
 
+            // GitHub download URLs are public — no auth header needed
             val request = Request.Builder()
                 .url(updateInfo.downloadUrl)
-                .header("Authorization", "token $AUTH_TOKEN")
+                .header("Accept", "application/octet-stream")
                 .build()
 
             val response = client.newCall(request).execute()
@@ -227,7 +225,6 @@ class ForgejoUpdater(
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            // Don't allow the installer to send back results — we just want it to install
             putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             putExtra(Intent.EXTRA_RETURN_RESULT, false)
         }
@@ -235,7 +232,6 @@ class ForgejoUpdater(
         try {
             context.startActivity(intent)
         } catch (e: android.content.ActivityNotFoundException) {
-            // Fallback: ACTION_VIEW (older devices or custom ROMs)
             val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -248,7 +244,6 @@ class ForgejoUpdater(
     /**
      * Compare two semantic version strings.
      * Returns true if `remote` is newer than `current`.
-     * e.g. "1.3.2" > "1.2.1" → true
      */
     private fun isVersionNewer(remote: String, current: String): Boolean {
         val remoteParts = remote.split(".").map { it.toIntOrNull() ?: 0 }
