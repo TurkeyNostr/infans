@@ -311,7 +311,7 @@ class BabyViewModel(
     fun isAmberInstalled(): Boolean = nostr.isAmberInstalled()
 
     // ── App Update ─────────────────────────────────────
-    private val currentVersionName: String = try {
+    val currentVersionName: String = try {
         app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "1.0.0"
     } catch (e: Exception) {
         "1.0.0"
