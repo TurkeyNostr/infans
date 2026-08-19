@@ -243,6 +243,12 @@ class NostrManager(context: Context) {
     }
 
     private fun connectAndSubscribe(signer: NostrSigner) {
+        scope.launch {
+            _connectAndSubscribeInternal(signer)
+        }
+    }
+
+    private suspend fun _connectAndSubscribeInternal(signer: NostrSigner) {
         relayPool.connect()
 
         // Subscribe to gift-wrapped DMs (kind 1059) addressed to us
@@ -261,18 +267,22 @@ class NostrManager(context: Context) {
         // Listen for incoming events
         scope.launch {
             relayPool.events.collect { wrapper ->
-                when (wrapper.event.kind) {
-                    GiftWrapMessaging.KIND_GIFT_WRAP -> {
-                        if (wrapper.subscriptionId == SUB_DMS) {
-                            handleIncomingDM(wrapper.event, signer)
+                try {
+                    when (wrapper.event.kind) {
+                        GiftWrapMessaging.KIND_GIFT_WRAP -> {
+                            if (wrapper.subscriptionId == SUB_DMS) {
+                                handleIncomingDM(wrapper.event, signer)
+                            }
+                        }
+                        BackupService.BACKUP_KIND -> {
+                            when (wrapper.subscriptionId) {
+                                SUB_BACKUP -> handleBackupEvent(wrapper.event, signer)
+                                SUB_PARTNER_SYNC -> handlePartnerSyncEvent(wrapper.event, signer)
+                            }
                         }
                     }
-                    BackupService.BACKUP_KIND -> {
-                        when (wrapper.subscriptionId) {
-                            SUB_BACKUP -> handleBackupEvent(wrapper.event, signer)
-                            SUB_PARTNER_SYNC -> handlePartnerSyncEvent(wrapper.event, signer)
-                        }
-                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling relay event kind=${wrapper.event.kind}", e)
                 }
             }
         }

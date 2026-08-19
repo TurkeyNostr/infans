@@ -15,6 +15,8 @@ package com.turkbot.babytracker.nostr.amber
 import android.content.Intent
 import androidx.activity.result.ActivityResult
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Bridge between the Activity's ActivityResultLauncher and suspend functions.
@@ -56,7 +58,11 @@ object AmberBridge {
             "AmberBridge is not bound. Call AmberBridge.bind() from MainActivity first."
         )
         val channel = Channel<ActivityResult>(1).also { resultChannel = it }
-        launchFn(intent)
+        // ActivityResultLauncher.launch() must be called on the main thread.
+        // Relay event handlers run on Dispatchers.IO, so we hop to Main here.
+        withContext(Dispatchers.Main) {
+            launchFn(intent)
+        }
         return channel.receive()
     }
 
