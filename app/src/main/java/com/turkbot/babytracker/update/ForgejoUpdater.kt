@@ -43,7 +43,7 @@ class ForgejoUpdater(
     companion object {
         // GitHub public API — no auth token needed for public repos
         private const val GITHUB_API_BASE =
-            "https://api.github.com/repos/TurkeyNostr/baby-tracker-android/releases"
+            "https://api.github.com/repos/TurkeyNostr/infans/releases"
 
         private const val PREFS_NAME = "baby_tracker_prefs"
         private const val KEY_AUTO_UPDATE = "auto_update_enabled"
