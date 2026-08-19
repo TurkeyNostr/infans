@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
@@ -41,6 +43,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val children by viewModel.children.collectAsState()
     val signer by nostrManager.signer.collectAsState()
     val relayConnected by nostrManager.relayConnected.collectAsState()
@@ -182,26 +185,36 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                 Text("Import nsec")
                             }
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            if (amberInstalled) {
-                                Button(
-                                    onClick = {
-                                        amberError = null
+                            Button(
+                                onClick = {
+                                    amberError = null
+                                    if (amberInstalled) {
                                         scope.launch {
                                             val result = nostrManager.loginWithAmber()
                                             if (result == null) {
                                                 amberError = "Amber login failed or was denied"
                                             }
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Default.AccountCircle, contentDescription = null)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Log in with Amber")
-                                }
-                            } else {
+                                    } else {
+                                        // Amber not installed — open F-Droid install page
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.greenart7c3.amber/"))
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            amberError = "Install Amber from F-Droid: f-droid.org/packages/com.greenart7c3.amber"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (amberInstalled) "Log in with Amber" else "Log in with Amber (install)")
+                            }
+                            if (!amberInstalled) {
                                 Text(
-                                    "Install the Amber app for NIP-55 signer support (key stays in Amber).",
+                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it. Tap above to install from F-Droid.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
