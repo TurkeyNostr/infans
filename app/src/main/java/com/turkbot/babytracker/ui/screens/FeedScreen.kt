@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Feeding
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
+import com.turkbot.babytracker.util.UnitPreferences
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -46,7 +47,8 @@ fun FeedScreen(viewModel: BabyViewModel) {
 
     var selectedType by remember { mutableStateOf("bottle") }
     var amountText by remember { mutableStateOf("") }
-    var selectedUnit by remember { mutableStateOf("ml") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var selectedUnit by remember { mutableStateOf(UnitPreferences.defaultFeedUnit(context)) }
     var selectedSide by remember { mutableStateOf("left") }
     var durationText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }

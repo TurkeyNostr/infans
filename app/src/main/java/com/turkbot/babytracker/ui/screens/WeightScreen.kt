@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Weight
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
+import com.turkbot.babytracker.util.UnitPreferences
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,11 +40,12 @@ import java.util.Locale
 fun WeightScreen(viewModel: BabyViewModel) {
     val weights by viewModel.weights.collectAsState()
     var weightInput by remember { mutableStateOf("") }
-    var weightUnit by remember { mutableStateOf("kg") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var weightUnit by remember { mutableStateOf(UnitPreferences.defaultWeightUnit(context)) }
     var heightInput by remember { mutableStateOf("") }
-    var heightUnit by remember { mutableStateOf("cm") }
+    var heightUnit by remember { mutableStateOf(UnitPreferences.defaultHeightUnit(context)) }
     var headCircInput by remember { mutableStateOf("") }
-    var headCircUnit by remember { mutableStateOf("cm") }
+    var headCircUnit by remember { mutableStateOf(UnitPreferences.defaultHeightUnit(context)) }
 
     val weightUnits = listOf("kg", "lb", "oz")
     val heightUnits = listOf("cm", "in")

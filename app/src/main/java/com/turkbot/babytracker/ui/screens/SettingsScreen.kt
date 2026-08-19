@@ -62,6 +62,54 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
+        // ─── Measurement Units ───────────────────────────
+        item {
+            SectionHeader("Measurement Units")
+        }
+
+        item {
+            var unitSystem by remember { mutableStateOf("metric") }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            LaunchedEffect(Unit) {
+                unitSystem = context.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+                    .getString("unit_system", "metric") ?: "metric"
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Display Units",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Sets the default for feeding, pumping, weight, and height across all screens.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val systems = listOf("metric" to "Metric (ml, kg, cm)", "imperial" to "Imperial (fl oz, lb, in)")
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        systems.forEachIndexed { index, (value, label) ->
+                            SegmentedButton(
+                                selected = unitSystem == value,
+                                onClick = {
+                                    unitSystem = value
+                                    context.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+                                        .edit().putString("unit_system", value).apply()
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index, systems.size)
+                            ) { Text(if (value == "metric") "Metric" else "Imperial") }
+                        }
+                    }
+                }
+            }
+        }
+
         // ─── Nostr Identity ─────────────────────────────
         item {
             SectionHeader("Nostr Identity")
