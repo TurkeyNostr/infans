@@ -163,6 +163,57 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         ) {
                             Text("Log Out / Reset")
                         }
+                        // ── Offer Amber switch if currently using a local key ──
+                        if (signer!!.type != SignerType.AMBER) {
+                            Spacer(Modifier.height(16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
+                                "Switch to Amber signer (NIP-55):",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    amberError = null
+                                    if (amberInstalled) {
+                                        scope.launch {
+                                            val result = nostrManager.loginWithAmber()
+                                            if (result == null) {
+                                                amberError = "Amber login failed or was denied"
+                                            }
+                                        }
+                                    } else {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.greenart7c3.amber/"))
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            amberError = "Install Amber from F-Droid: f-droid.org/packages/com.greenart7c3.amber"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (amberInstalled) "Log in with Amber" else "Log in with Amber (install)")
+                            }
+                            if (!amberInstalled) {
+                                Text(
+                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (amberError != null) {
+                                Text(
+                                    amberError!!,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
                     } else {
                         Text(
                             "No Nostr identity yet.",
@@ -196,7 +247,6 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                             }
                                         }
                                     } else {
-                                        // Amber not installed — open F-Droid install page
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.greenart7c3.amber/"))
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         try {
