@@ -165,62 +165,48 @@ class NostrManager(context: Context) {
     }
 
     /**
-     * Log in with Amber (NIP-55). Requests the pubkey from Amber; the private key
-     * never enters this app. Returns the npub on success, null on failure.
+     * Log in with an external NIP-55 signer (e.g. Amber). Requests the pubkey
+     * via the `nostrsigner:` URI scheme; the private key never enters this app.
      *
-     * If Amber returns relay preferences, they are applied immediately.
-     * NIP-65 relays are also fetched as a fallback/supplement.
+     * After login, the signer's package name is stored so all subsequent
+     * sign/encrypt/decrypt requests are addressed to it.
+     *
+     * Returns the npub on success, null on failure or user rejection.
      */
     suspend fun loginWithAmber(): String? {
         return try {
             val loginResult = AmberSigner.requestPubkey()
             if (loginResult == null || loginResult.npub.isBlank()) {
-                Log.e(TAG, "Amber returned empty npub")
+                Log.e(TAG, "Signer returned empty pubkey")
                 return null
             }
-            val pubHex = npubToHex(loginResult.npub)
-            if (pubHex == null) {
-                Log.e(TAG, "Invalid npub from Amber: ${loginResult.npub}")
-                return null
-            }
-            keyStore.saveAmberNpub(loginResult.npub)
-            val signer = AmberSigner(loginResult.npub, pubHex)
+            // Store npub + signer package name
+            keyStore.saveAmberNpub(loginResult.npub, loginResult.signerPackage)
+            val signer = AmberSigner(
+                npub = loginResult.npub,
+                pubkeyHexStr = loginResult.pubkeyHex,
+                signerPackage = loginResult.signerPackage
+            )
             _signer.value = signer
             connectAndSubscribe(signer)
-
-            // Apply Amber's relay preferences if provided
-            if (!loginResult.relays.isNullOrEmpty()) {
-                applyRelays(loginResult.relays)
-            }
-            // Also fetch NIP-65 in background (may override or supplement)
-            scope.launch { fetchAndApplyNip65Relays(pubHex) }
-
+            scope.launch { fetchAndApplyNip65Relays(loginResult.pubkeyHex) }
             loginResult.npub
         } catch (e: Exception) {
-            Log.e(TAG, "Amber login failed", e)
+            Log.e(TAG, "External signer login failed", e)
             null
         }
     }
 
     /**
-     * Check if Amber is installed on the device.
-     * Tries multiple detection methods for reliability across Android versions.
+     * Check if a NIP-55 external signer (e.g. Amber) is installed.
+     * Per NIP-55: query for activities that handle the `nostrsigner:` URI scheme.
      */
     fun isAmberInstalled(): Boolean {
-        val pm = appContext.packageManager
-        // Method 1: getPackageInfo (works if <queries> declares the package)
-        try {
-            @Suppress("DEPRECATION")
-            pm.getPackageInfo("com.greenart7c3.amber", 0)
-            return true
-        } catch (_: Exception) {}
-        // Method 2: getLaunchIntentForPackage (respects <queries> but more robust)
-        if (pm.getLaunchIntentForPackage("com.greenart7c3.amber") != null) return true
-        // Method 3: resolve the NIP-55 GET_PUBKEY intent (must setPackage for Android 11+)
-        val intent = android.content.Intent("com.greenart7c3.amber.GET_PUBKEY")
-            .setPackage("com.greenart7c3.amber")
-        if (pm.resolveActivity(intent, 0) != null) return true
-        return false
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("nostrsigner:")
+        )
+        return appContext.packageManager.queryIntentActivities(intent, 0).isNotEmpty()
     }
 
     /**

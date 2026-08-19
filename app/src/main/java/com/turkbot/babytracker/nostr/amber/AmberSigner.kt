@@ -13,6 +13,7 @@
 package com.turkbot.babytracker.nostr.amber
 
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.activity.result.ActivityResult
 import com.turkbot.babytracker.nostr.crypto.NostrSigner
@@ -20,23 +21,31 @@ import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.events.NostrEvent
 
 /**
- * NIP-55 signer that delegates to the Amber app via Android Intents.
+ * NIP-55 signer that delegates to an external Android signer app (e.g. Amber)
+ * via the `nostrsigner:` URI scheme.
  *
- * The private key never enters this app — Amber holds it and performs:
+ * Implements the NIP-55 intent transport:
+ *   - Detection: query for activities that handle `nostrsigner:` URIs
+ *   - get_public_key: `Intent(ACTION_VIEW, Uri.parse("nostrsigner:"))` with
+ *     `type` = "get_public_key" — NO package set (lets user pick signer)
+ *   - sign_event / nip44_encrypt / nip44_decrypt: same URI scheme but with
+ *     `package` set to the signer's package name (returned from get_public_key)
+ *
+ * The private key never enters this app. The signer holds it and performs:
  *   - Schnorr event signing
- *   - NIP-44 encryption / decryption (ECDH + AES-GCM)
+ *   - NIP-44 encryption / decryption
  *
- * Flow for each operation:
- *   1. Build an Intent with the appropriate action + extras
- *   2. AmberBridge.launch(intent) suspends and sends to Amber
- *   3. Amber shows permission dialog (first time per app)
- *   4. Result returns via ActivityResult → parsed here
- *
- * Amber package: com.greenart7c3.amber
+ * Result handling (per NIP-55):
+ *   - resultCode != RESULT_OK → signer error (crash)
+ *   - `rejected` extra == true → user denied the request
+ *   - `result` extra → the method result (pubkey, signature, ciphertext, etc.)
+ *   - `event` extra → signed event JSON (sign_event only)
+ *   - `package` extra → signer package name (get_public_key only)
  */
 class AmberSigner(
     override val npub: String,
-    private val pubkeyHexStr: String
+    private val pubkeyHexStr: String,
+    private val signerPackage: String
 ) : NostrSigner {
 
     override val pubkeyHex: String get() = pubkeyHexStr
@@ -45,133 +54,140 @@ class AmberSigner(
 
     companion object {
         private const val TAG = "AmberSigner"
-        private const val AMBER_PACKAGE = "com.greenart7c3.amber"
 
-        // Intent actions
-        private const val ACTION_SIGN_EVENT = "com.greenart7c3.amber.SIGN_EVENT"
-        private const val ACTION_NIP44_ENCRYPT = "com.greenart7c3.amber.NIP44_ENCRYPT"
-        private const val ACTION_NIP44_DECRYPT = "com.greenart7c3.amber.NIP44_DECRYPT"
-        private const val ACTION_GET_PUBKEY = "com.greenart7c3.amber.GET_PUBKEY"
-
-        // Intent extras
-        private const val EXTRA_EVENT = "event"
-        private const val EXTRA_PUBKEY = "pubkey"
-        private const val EXTRA_PUBKEY_TO = "pubkey_to"        // recipient (encrypt)
-        private const val EXTRA_PUBKEY_FROM = "pubkey_from"    // sender (decrypt)
-        private const val EXTRA_PLAINTEXT = "plaintext"
-        private const val EXTRA_CIPHERTEXT = "ciphertext"
+        // NIP-55 intent extras
+        private const val EXTRA_TYPE = "type"
         private const val EXTRA_RESULT = "result"
-        private const val EXTRA_SIGNATURE = "signature"
-        private const val EXTRA_SIGNED_EVENT = "signed_event"
-        private const val EXTRA_ERROR = "error"
-        private const val EXTRA_RELAYS = "relays"
+        private const val EXTRA_EVENT = "event"
+        private const val EXTRA_PACKAGE = "package"
+        private const val EXTRA_REJECTED = "rejected"
+        private const val EXTRA_PUBKEY = "pubkey"
+        private const val EXTRA_CURRENT_USER = "current_user"
+        private const val EXTRA_ID = "id"
+
+        // NIP-55 method names
+        private const val METHOD_GET_PUBKEY = "get_public_key"
+        private const val METHOD_SIGN_EVENT = "sign_event"
+        private const val METHOD_NIP44_ENCRYPT = "nip44_encrypt"
+        private const val METHOD_NIP44_DECRYPT = "nip44_decrypt"
 
         /**
-         * Result of requesting pubkey from Amber — may include relay preferences.
+         * Result of requesting pubkey from a NIP-55 signer.
          */
-        data class AmberLoginResult(
+        data class SignerLoginResult(
             val npub: String,
-            val relays: List<String>? = null
+            val pubkeyHex: String,
+            val signerPackage: String
         )
 
         /**
-         * Request the user's pubkey from Amber.
-         * This triggers Amber's permission dialog for the first time.
-         * Returns the npub + optional relay list, or null if the user denied or Amber isn't installed.
+         * Request the user's pubkey from any installed NIP-55 signer.
+         * This triggers the signer's permission dialog for the first time.
          *
-         * Amber may include a "relays" string-array extra in the response intent,
-         * containing the user's preferred relays (from their Amber settings).
+         * Per NIP-55: the get_public_key intent does NOT set the package —
+         * the system shows a chooser if multiple signers are installed.
+         *
+         * Returns the npub + hex pubkey + signer package name, or null if
+         * the user denied, no signer is installed, or the response was invalid.
          */
-        suspend fun requestPubkey(): AmberLoginResult? {
+        suspend fun requestPubkey(): SignerLoginResult? {
             if (!AmberBridge.isBound()) {
                 Log.e(TAG, "AmberBridge not bound")
                 return null
             }
             return try {
-                val intent = Intent(ACTION_GET_PUBKEY).apply {
-                    setPackage(AMBER_PACKAGE)
+                // Per NIP-55: omit package for get_public_key so the user can
+                // pick which signer to use (if multiple are installed)
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:")).apply {
+                    putExtra(EXTRA_TYPE, METHOD_GET_PUBKEY)
                 }
                 val result = AmberBridge.launch(intent)
                 if (result.resultCode != -1) {  // Activity.RESULT_OK = -1
-                    Log.e(TAG, "Amber returned code ${result.resultCode}")
+                    Log.e(TAG, "Signer returned code ${result.resultCode}")
                     return null
                 }
-                val npub = result.data?.getStringExtra(EXTRA_PUBKEY)
-                    ?: result.data?.getStringExtra(EXTRA_RESULT)
-                if (npub.isNullOrBlank()) {
-                    Log.e(TAG, "Amber returned empty pubkey")
-                    null
-                } else {
-                    // Amber may return preferred relays as a string array
-                    val relayArray = result.data?.getStringArrayExtra(EXTRA_RELAYS)
-                    val relays = relayArray?.toList()?.filter { it.isNotBlank() }
-                    if (relays != null) {
-                        Log.d(TAG, "Amber returned ${relays.size} relays")
-                    }
-                    AmberLoginResult(npub, relays)
+                if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+                    Log.d(TAG, "User rejected get_public_key")
+                    return null
                 }
+                val pubkeyHex = result.data?.getStringExtra(EXTRA_RESULT)
+                if (pubkeyHex.isNullOrBlank()) {
+                    Log.e(TAG, "Signer returned empty pubkey")
+                    return null
+                }
+                // The signer returns its package name so we can address
+                // all subsequent requests to it
+                val pkg = result.data?.getStringExtra(EXTRA_PACKAGE)
+                if (pkg.isNullOrBlank()) {
+                    Log.e(TAG, "Signer did not return package name")
+                    return null
+                }
+                // Convert hex pubkey to npub for storage/display
+                val npub = try {
+                    val pubBytes = com.turkbot.babytracker.nostr.crypto.NostrKeys.fromHex(pubkeyHex)
+                    com.turkbot.babytracker.nostr.crypto.NostrKeys.encodeNpub(pubBytes)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Invalid pubkey hex from signer: $pubkeyHex", e)
+                    return null
+                }
+                SignerLoginResult(npub = npub, pubkeyHex = pubkeyHex, signerPackage = pkg)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to get pubkey from Amber", e)
+                Log.e(TAG, "Failed to get pubkey from signer", e)
                 null
             }
         }
-
-        /**
-         * Check whether Amber is installed and the bridge is ready.
-         * (Actual install detection is done at the UI layer via package manager.)
-         */
-        fun isAvailable(): Boolean = AmberBridge.isBound()
     }
 
     override suspend fun signEvent(unsigned: NostrEvent): NostrEvent {
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
-        // Send the unsigned event JSON (with id, without sig) to Amber
         val unsignedJson = unsigned.copy(sig = "").toJsonObject()
-        val intent = Intent(ACTION_SIGN_EVENT).apply {
-            setPackage(AMBER_PACKAGE)
-            putExtra(EXTRA_EVENT, unsignedJson)
-            putExtra(EXTRA_PUBKEY, pubkeyHexStr)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:$unsignedJson")).apply {
+            setPackage(signerPackage)
+            putExtra(EXTRA_TYPE, METHOD_SIGN_EVENT)
+            putExtra(EXTRA_CURRENT_USER, pubkeyHexStr)
+            putExtra(EXTRA_ID, unsigned.id)
         }
         val result = AmberBridge.launch(intent)
         if (result.resultCode != -1) {
-            throw AmberException("Amber sign returned code ${result.resultCode}")
+            throw AmberException("Signer returned code ${result.resultCode}")
         }
-        val data = result.data
-        // Amber may return the full signed event JSON or just the signature
-        val signedEventJson = data?.getStringExtra(EXTRA_SIGNED_EVENT)
-            ?: data?.getStringExtra(EXTRA_EVENT)
-        if (signedEventJson != null) {
+        if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            throw AmberException("User rejected sign request")
+        }
+        // Prefer the full signed event JSON; fall back to just the signature
+        val signedEventJson = result.data?.getStringExtra(EXTRA_EVENT)
+        if (!signedEventJson.isNullOrBlank()) {
             return NostrEvent.fromJson(signedEventJson)
         }
-        val signature = data?.getStringExtra(EXTRA_SIGNATURE)
-        if (signature != null) {
+        val signature = result.data?.getStringExtra(EXTRA_RESULT)
+        if (!signature.isNullOrBlank()) {
             return unsigned.copy(sig = signature)
         }
-        val error = data?.getStringExtra(EXTRA_ERROR)
-        throw AmberException("Amber sign returned no signature${error?.let { ": $it" } ?: ""}")
+        throw AmberException("Signer returned no signature")
     }
 
     override suspend fun nip44Encrypt(plaintext: String, recipientPubkeyHex: String): String {
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
-        val intent = Intent(ACTION_NIP44_ENCRYPT).apply {
-            setPackage(AMBER_PACKAGE)
-            putExtra(EXTRA_PUBKEY, pubkeyHexStr)
-            putExtra(EXTRA_PUBKEY_TO, recipientPubkeyHex)
-            putExtra(EXTRA_PLAINTEXT, plaintext)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:$plaintext")).apply {
+            setPackage(signerPackage)
+            putExtra(EXTRA_TYPE, METHOD_NIP44_ENCRYPT)
+            putExtra(EXTRA_PUBKEY, recipientPubkeyHex)
+            putExtra(EXTRA_CURRENT_USER, pubkeyHexStr)
         }
         val result = AmberBridge.launch(intent)
         if (result.resultCode != -1) {
-            throw AmberException("Amber encrypt returned code ${result.resultCode}")
+            throw AmberException("Signer encrypt returned code ${result.resultCode}")
+        }
+        if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            throw AmberException("User rejected encrypt request")
         }
         val ciphertext = result.data?.getStringExtra(EXTRA_RESULT)
-            ?: result.data?.getStringExtra(EXTRA_CIPHERTEXT)
         if (ciphertext.isNullOrBlank()) {
-            val error = result.data?.getStringExtra(EXTRA_ERROR)
-            throw AmberException("Amber encrypt returned no ciphertext${error?.let { ": $it" } ?: ""}")
+            throw AmberException("Signer returned no ciphertext")
         }
         return ciphertext
     }
@@ -180,21 +196,22 @@ class AmberSigner(
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
-        val intent = Intent(ACTION_NIP44_DECRYPT).apply {
-            setPackage(AMBER_PACKAGE)
-            putExtra(EXTRA_PUBKEY, pubkeyHexStr)
-            putExtra(EXTRA_PUBKEY_FROM, senderPubkeyHex)
-            putExtra(EXTRA_CIPHERTEXT, payload)
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:$payload")).apply {
+            setPackage(signerPackage)
+            putExtra(EXTRA_TYPE, METHOD_NIP44_DECRYPT)
+            putExtra(EXTRA_PUBKEY, senderPubkeyHex)
+            putExtra(EXTRA_CURRENT_USER, pubkeyHexStr)
         }
         val result = AmberBridge.launch(intent)
         if (result.resultCode != -1) {
-            throw AmberException("Amber decrypt returned code ${result.resultCode}")
+            throw AmberException("Signer decrypt returned code ${result.resultCode}")
+        }
+        if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            throw AmberException("User rejected decrypt request")
         }
         val plaintext = result.data?.getStringExtra(EXTRA_RESULT)
-            ?: result.data?.getStringExtra(EXTRA_PLAINTEXT)
-        if (plaintext == null) {
-            val error = result.data?.getStringExtra(EXTRA_ERROR)
-            throw AmberException("Amber decrypt returned no plaintext${error?.let { ": $it" } ?: ""}")
+        if (plaintext.isNullOrBlank()) {
+            throw AmberException("Signer returned no plaintext")
         }
         return plaintext
     }

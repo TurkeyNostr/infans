@@ -72,15 +72,24 @@ class SecureKeyStore(context: Context) {
 
     // ── Amber (NIP-55) ─────────────────────────────────
 
-    fun saveAmberNpub(npub: String) {
-        prefs.edit()
+    fun saveAmberNpub(npub: String, signerPackage: String? = null) {
+        val edit = prefs.edit()
             .putString(KEY_NPUB, npub)
             .putString(KEY_MODE, "amber")
             .remove(KEY_NSEC) // no local key in amber mode
-            .apply()
+        if (signerPackage != null) {
+            edit.putString(KEY_SIGNER_PKG, signerPackage)
+        }
+        edit.apply()
     }
 
     fun getAmberNpub(): String? = prefs.getString(KEY_NPUB, null)
+
+    fun getSignerPackage(): String? = prefs.getString(KEY_SIGNER_PKG, null)
+
+    fun saveSignerPackage(pkg: String) {
+        prefs.edit().putString(KEY_SIGNER_PKG, pkg).apply()
+    }
 
     // ── Common ─────────────────────────────────────────
 
@@ -89,8 +98,6 @@ class SecureKeyStore(context: Context) {
     fun clear() {
         prefs.edit().clear().apply()
     }
-
-    fun hasKeys(): Boolean = prefs.getString(KEY_NSEC, null) != null || getMode() == SignerMode.AMBER
 
     // ── Relay preferences ──────────────────────────────
 
@@ -137,6 +144,7 @@ class SecureKeyStore(context: Context) {
         private const val KEY_NSEC = "nsec"
         private const val KEY_NPUB = "npub"
         private const val KEY_MODE = "signer_mode"
+        private const val KEY_SIGNER_PKG = "signer_package"
         private const val KEY_RELAYS = "relay_urls"
         private const val KEY_PARTNER_NPUB = "partner_npub"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"
