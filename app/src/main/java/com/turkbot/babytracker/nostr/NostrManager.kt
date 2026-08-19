@@ -204,14 +204,21 @@ class NostrManager(context: Context) {
 
     /**
      * Check if Amber is installed on the device.
+     * Tries multiple detection methods for reliability across Android versions.
      */
     fun isAmberInstalled(): Boolean {
-        return try {
-            appContext.packageManager.getPackageInfo("com.greenart7c3.amber", 0)
-            true
-        } catch (e: Exception) {
-            false
-        }
+        val pm = appContext.packageManager
+        // Method 1: getPackageInfo (works if <queries> declares the package)
+        try {
+            pm.getPackageInfo("com.greenart7c3.amber", 0)
+            return true
+        } catch (_: Exception) {}
+        // Method 2: getLaunchIntentForPackage (respects <queries> but more robust)
+        if (pm.getLaunchIntentForPackage("com.greenart7c3.amber") != null) return true
+        // Method 3: resolve the NIP-55 GET_PUBKEY intent
+        val intent = android.content.Intent("com.greenart7c3.amber.GET_PUBKEY")
+        if (pm.resolveActivity(intent, 0) != null) return true
+        return false
     }
 
     /**

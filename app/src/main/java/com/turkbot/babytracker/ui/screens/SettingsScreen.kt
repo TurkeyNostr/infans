@@ -59,7 +59,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     var partnerError by rememberSaveable { mutableStateOf<String?>(null) }
 
     val dateFmt = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
-    val amberInstalled = remember { viewModel.isAmberInstalled() }
+    var amberInstalled by remember { mutableStateOf(viewModel.isAmberInstalled()) }
+
+    // Re-check Amber installation when Settings gains focus
+    // (e.g. returning from Amber after install)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                amberInstalled = viewModel.isAmberInstalled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -184,12 +197,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                             }
                                         }
                                     } else {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.greenart7c3.amber/"))
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/i/com.greenart7c3.amber/"))
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from F-Droid: f-droid.org/packages/com.greenart7c3.amber"
+                                            amberError = "Install Amber from Zapstore: zapstore.dev/i/com.greenart7c3.amber"
                                         }
                                     }
                                 },
@@ -247,12 +260,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                             }
                                         }
                                     } else {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.greenart7c3.amber/"))
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://zapstore.dev/i/com.greenart7c3.amber/"))
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from F-Droid: f-droid.org/packages/com.greenart7c3.amber"
+                                            amberError = "Install Amber from Zapstore: zapstore.dev/i/com.greenart7c3.amber"
                                         }
                                     }
                                 },
@@ -264,7 +277,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                             }
                             if (!amberInstalled) {
                                 Text(
-                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it. Tap above to install from F-Droid.",
+                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it. Tap above to install from Zapstore.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
