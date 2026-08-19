@@ -19,16 +19,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,13 +59,20 @@ fun SummaryScreen(
     viewModel: BabyViewModel,
     onNavigateToWeight: () -> Unit = {},
     onNavigateToCharts: () -> Unit = {},
-    onNavigateToMilestones: () -> Unit = {}
+    onNavigateToMilestones: () -> Unit = {},
+    onNavigateToDiaper: () -> Unit = {},
+    onNavigateToPumping: () -> Unit = {},
+    onNavigateToHealth: () -> Unit = {}
 ) {
     val feedings by viewModel.feedings.collectAsState()
     val sleeps by viewModel.sleeps.collectAsState()
     val weights by viewModel.weights.collectAsState()
     val milestones by viewModel.milestones.collectAsState()
+    val diapers by viewModel.diapers.collectAsState()
+    val pumpings by viewModel.pumpings.collectAsState()
+    val healthRecords by viewModel.healthRecords.collectAsState()
     val child by viewModel.activeChild.collectAsState()
+    val children by viewModel.children.collectAsState()
 
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -69,6 +82,26 @@ fun SummaryScreen(
     }
     val todaySleeps = sleeps.filter { s ->
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(s.start)) == today
+    }
+
+    // Last activity timestamps for "last fed" / "last slept" / "last diaper"
+    val lastFeeding = feedings.maxByOrNull { it.time }
+    val lastSleep = sleeps.maxByOrNull { it.start }
+    val lastDiaper = diapers.maxByOrNull { it.time }
+
+    val todayDiapers = diapers.filter { d ->
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(d.time)) == today
+    }
+
+    // Elapsed time since last event
+    fun timeAgo(time: Long): String {
+        val mins = ((System.currentTimeMillis() - time) / 60000).toInt()
+        return when {
+            mins < 1 -> "just now"
+            mins < 60 -> "${mins}m ago"
+            mins < 1440 -> "${mins / 60}h ${mins % 60}m ago"
+            else -> "${mins / 1440}d ago"
+        }
     }
 
     // 7-day trend data
@@ -132,6 +165,70 @@ fun SummaryScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
                     }
+                    // Multi-child selector — show dropdown if more than 1 child
+                    if (children.size > 1) {
+                        Spacer(Modifier.height(8.dp))
+                        var showChildMenu by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(
+                                onClick = { showChildMenu = true },
+                                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "Switch child ▾",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showChildMenu,
+                                onDismissRequest = { showChildMenu = false }
+                            ) {
+                                children.forEach { c ->
+                                    DropdownMenuItem(
+                                        text = { Text(c.name) },
+                                        onClick = {
+                                            viewModel.selectChild(c.id)
+                                            showChildMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Last activity stats ────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Last Activity",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    LastActivityRow(
+                        icon = Icons.Default.Restaurant,
+                        label = "Last Feeding",
+                        value = lastFeeding?.let { "${Units.feedTypeLabel(it.type)} · ${timeAgo(it.time)}" } ?: "—"
+                    )
+                    LastActivityRow(
+                        icon = Icons.Default.Bedtime,
+                        label = "Last Sleep",
+                        value = lastSleep?.let { "${Units.fmtDuration(it.duration)} · ${timeAgo(it.start)}" } ?: "—"
+                    )
+                    LastActivityRow(
+                        icon = Icons.Default.Spa,
+                        label = "Last Diaper",
+                        value = lastDiaper?.let { "${it.contents.replaceFirstChar { c -> c.uppercase() }} · ${timeAgo(it.time)}" } ?: "—"
+                    )
                 }
             }
         }
@@ -162,6 +259,31 @@ fun SummaryScreen(
                 )
             }
         }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickActionCard(
+                    icon = Icons.Default.Spa,
+                    label = "Diaper",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToDiaper
+                )
+                QuickActionCard(
+                    icon = Icons.Default.WaterDrop,
+                    label = "Pumping",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToPumping
+                )
+                QuickActionCard(
+                    icon = Icons.Default.HealthAndSafety,
+                    label = "Health",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToHealth
+                )
+            }
+        }
 
         // ── Today's stats ──────────────────────────────────
         item {
@@ -179,6 +301,27 @@ fun SummaryScreen(
                     icon = Icons.Default.Bedtime,
                     label = "Sleep Today",
                     value = Units.fmtDuration(todaySleeps.sumOf { it.duration }),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard(
+                    icon = Icons.Default.Spa,
+                    label = "Diapers Today",
+                    value = todayDiapers.size.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    icon = Icons.Default.WaterDrop,
+                    label = "Pumping Today",
+                    value = pumpings.count { p ->
+                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(p.time)) == today
+                    }.toString(),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -361,6 +504,37 @@ private fun StatCard(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun LastActivityRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

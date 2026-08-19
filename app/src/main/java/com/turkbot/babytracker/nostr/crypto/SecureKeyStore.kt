@@ -125,12 +125,21 @@ class SecureKeyStore(context: Context) {
 
     fun getPartnerNpub(): String? = prefs.getString(KEY_PARTNER_NPUB, null)
 
+    // ── Reminder interval ──────────────────────────────
+
+    fun saveReminderInterval(minutes: Int) {
+        prefs.edit().putInt(KEY_REMINDER_INTERVAL, minutes).apply()
+    }
+
+    fun getReminderInterval(): Int = prefs.getInt(KEY_REMINDER_INTERVAL, 0)
+
     companion object {
         private const val KEY_NSEC = "nsec"
         private const val KEY_NPUB = "npub"
         private const val KEY_MODE = "signer_mode"
         private const val KEY_RELAYS = "relay_urls"
         private const val KEY_PARTNER_NPUB = "partner_npub"
+        private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"
     }
 }
 

@@ -12,17 +12,19 @@
 
 package com.turkbot.babytracker.ui.viewmodel
 
-import android.app.Application
+import android.content.Context
 import androidx.lifecycle.*
 import com.turkbot.babytracker.BabyTrackerApp
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.nostr.NostrManager
+import com.turkbot.babytracker.reminder.ReminderScheduler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 class BabyViewModel(
+    private val app: BabyTrackerApp,
     private val repo: BabyRepository,
     private val nostr: NostrManager
 ) : ViewModel() {
@@ -54,6 +56,18 @@ class BabyViewModel(
 
     val milestones: StateFlow<List<Milestone>> = activeChild
         .filterNotNull().flatMapLatest { repo.milestones(it.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val diapers: StateFlow<List<Diaper>> = activeChild
+        .filterNotNull().flatMapLatest { repo.diapers(it.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pumpings: StateFlow<List<Pumping>> = activeChild
+        .filterNotNull().flatMapLatest { repo.pumpings(it.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val healthRecords: StateFlow<List<HealthRecord>> = activeChild
+        .filterNotNull().flatMapLatest { repo.healthRecords(it.id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val messages: StateFlow<List<ChatMessage>> = repo.messages()
@@ -140,7 +154,7 @@ class BabyViewModel(
     }
 
     // ── Weight ────────────────────────────────────────
-    fun addWeight(valueKg: Double, unit: String, heightCm: Double?, heightUnit: String?) {
+    fun addWeight(valueKg: Double, unit: String, heightCm: Double?, heightUnit: String?, headCircCm: Double?, headCircUnit: String?) {
         val child = activeChild.value ?: return
         viewModelScope.launch {
             repo.saveWeight(Weight(
@@ -150,7 +164,9 @@ class BabyViewModel(
                 value = valueKg,
                 unit = unit,
                 height = heightCm,
-                heightUnit = heightUnit
+                heightUnit = heightUnit,
+                headCirc = headCircCm,
+                headCircUnit = headCircUnit
             ))
             nostr.exportBackup()
         }
@@ -185,6 +201,78 @@ class BabyViewModel(
         }
     }
 
+    // ── Diaper ────────────────────────────────────────
+    fun addDiaper(contents: String, color: String?, note: String?) {
+        val child = activeChild.value ?: return
+        viewModelScope.launch {
+            repo.saveDiaper(Diaper(
+                id = UUID.randomUUID().toString(),
+                childId = child.id,
+                time = System.currentTimeMillis(),
+                contents = contents,
+                color = color,
+                note = note
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deleteDiaper(id: String) {
+        viewModelScope.launch {
+            repo.deleteDiaper(id)
+            nostr.exportBackup()
+        }
+    }
+
+    // ── Pumping ───────────────────────────────────────
+    fun addPumping(amountMl: Double, unit: String, duration: Int?, side: String?, note: String?) {
+        val child = activeChild.value ?: return
+        viewModelScope.launch {
+            repo.savePumping(Pumping(
+                id = UUID.randomUUID().toString(),
+                childId = child.id,
+                time = System.currentTimeMillis(),
+                amount = amountMl,
+                unit = unit,
+                duration = duration,
+                side = side,
+                note = note
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deletePumping(id: String) {
+        viewModelScope.launch {
+            repo.deletePumping(id)
+            nostr.exportBackup()
+        }
+    }
+
+    // ── Health records ────────────────────────────────
+    fun addHealthRecord(temperature: Double?, medication: String?, dose: String?, note: String?) {
+        val child = activeChild.value ?: return
+        viewModelScope.launch {
+            repo.saveHealthRecord(HealthRecord(
+                id = UUID.randomUUID().toString(),
+                childId = child.id,
+                time = System.currentTimeMillis(),
+                temperature = temperature,
+                medication = medication,
+                dose = dose,
+                note = note
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deleteHealthRecord(id: String) {
+        viewModelScope.launch {
+            repo.deleteHealthRecord(id)
+            nostr.exportBackup()
+        }
+    }
+
     // ── Nostr ─────────────────────────────────────────
     fun generateNostrIdentity() {
         viewModelScope.launch { nostr.generateIdentity() }
@@ -206,6 +294,19 @@ class BabyViewModel(
         nostr.setPartnerNpub(npub)
     }
 
+    // ── Reminders ──────────────────────────────────────
+    fun setReminderInterval(minutes: Int) {
+        viewModelScope.launch {
+            if (minutes > 0) {
+                ReminderScheduler.schedule(app, minutes)
+            } else {
+                ReminderScheduler.cancel(app)
+            }
+            app.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+                .edit().putInt("reminder_interval", minutes).apply()
+        }
+    }
+
     fun isAmberInstalled(): Boolean = nostr.isAmberInstalled()
 
     fun sendDirectMessage(text: String, recipientNpub: String) {
@@ -220,6 +321,6 @@ class BabyViewModel(
 class BabyViewModelFactory(private val app: BabyTrackerApp) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return BabyViewModel(BabyRepository(app), app.nostrManager) as T
+        return BabyViewModel(app, BabyRepository(app), app.nostrManager) as T
     }
 }

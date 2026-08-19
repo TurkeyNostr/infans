@@ -413,6 +413,9 @@ class NostrManager(context: Context) {
         payload.sleeps.forEach { repo.saveSleep(it) }
         payload.weights.forEach { repo.saveWeight(it) }
         payload.milestones.forEach { repo.saveMilestone(it) }
+        payload.diapers.forEach { repo.saveDiaper(it) }
+        payload.pumpings.forEach { repo.savePumping(it) }
+        payload.healthRecords.forEach { repo.saveHealthRecord(it) }
     }
 
     /**

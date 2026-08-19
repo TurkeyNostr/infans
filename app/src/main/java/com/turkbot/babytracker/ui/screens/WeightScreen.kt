@@ -42,6 +42,8 @@ fun WeightScreen(viewModel: BabyViewModel) {
     var weightUnit by remember { mutableStateOf("kg") }
     var heightInput by remember { mutableStateOf("") }
     var heightUnit by remember { mutableStateOf("cm") }
+    var headCircInput by remember { mutableStateOf("") }
+    var headCircUnit by remember { mutableStateOf("cm") }
 
     val weightUnits = listOf("kg", "lb", "oz")
     val heightUnits = listOf("cm", "in")
@@ -107,6 +109,25 @@ fun WeightScreen(viewModel: BabyViewModel) {
                         }
                     }
 
+                    // Head circumference (optional) + unit segmented buttons
+                    OutlinedTextField(
+                        value = headCircInput,
+                        onValueChange = { headCircInput = it },
+                        label = { Text("Head Circ. (optional)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        heightUnits.forEachIndexed { index, unit ->
+                            SegmentedButton(
+                                selected = headCircUnit == unit,
+                                onClick = { headCircUnit = unit },
+                                shape = SegmentedButtonDefaults.itemShape(index, heightUnits.size)
+                            ) { Text(unit) }
+                        }
+                    }
+
                     Button(
                         onClick = {
                             val weightValue = weightInput.trim().toDoubleOrNull()
@@ -116,9 +137,14 @@ fun WeightScreen(viewModel: BabyViewModel) {
                                     Units.toCm(it, heightUnit)
                                 }
                                 val hUnit = if (heightCm != null) heightUnit else null
-                                viewModel.addWeight(valueKg, weightUnit, heightCm, hUnit)
+                                val headCircCm: Double? = headCircInput.trim().toDoubleOrNull()?.let {
+                                    Units.toCm(it, headCircUnit)
+                                }
+                                val hcUnit = if (headCircCm != null) headCircUnit else null
+                                viewModel.addWeight(valueKg, weightUnit, heightCm, hUnit, headCircCm, hcUnit)
                                 weightInput = ""
                                 heightInput = ""
+                                headCircInput = ""
                             }
                         },
                         enabled = weightInput.trim().toDoubleOrNull() != null,
@@ -201,9 +227,16 @@ private fun WeightCard(
                 )
                 if (weight.height != null && weight.heightUnit != null) {
                     Text(
-                        Units.fmtHeight(weight.height, weight.heightUnit),
+                        "Height: ${Units.fmtHeight(weight.height, weight.heightUnit)}",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                if (weight.headCirc != null && weight.headCircUnit != null) {
+                    Text(
+                        "Head: ${Units.fmtHeight(weight.headCirc, weight.headCircUnit)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
             }

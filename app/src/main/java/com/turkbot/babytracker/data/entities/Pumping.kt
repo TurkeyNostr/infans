@@ -17,21 +17,22 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
- * A weight + optional height measurement.
- * Weight stored in kg internally; height in cm.
- * Original unit preserved for display.
+ * A pumping session record.
+ * @param amount volume in ml (internal storage)
+ * @param unit "ml" or "fl_oz"
+ * @param duration minutes spent pumping
+ * @param side "left", "right", or "both"
  */
 @Serializable
-@Entity(tableName = "weights")
-data class Weight(
+@Entity(tableName = "pumpings")
+data class Pumping(
     @PrimaryKey
     val id: String,
     val childId: String,
-    val date: Long,               // epoch millis
-    val value: Double,            // kg
-    val unit: String,             // "kg", "lb", "oz"
-    val height: Double? = null,   // cm
-    val heightUnit: String? = null, // "cm" or "in"
-    val headCirc: Double? = null,   // cm — head circumference
-    val headCircUnit: String? = null // "cm" or "in"
+    val time: Long,              // epoch millis
+    val amount: Double,          // ml
+    val unit: String,            // "ml" or "fl_oz"
+    val duration: Int? = null,   // minutes
+    val side: String? = null,    // "left", "right", "both"
+    val note: String? = null
 )

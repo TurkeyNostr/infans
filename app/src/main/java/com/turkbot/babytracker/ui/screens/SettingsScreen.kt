@@ -15,6 +15,7 @@ package com.turkbot.babytracker.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
@@ -315,6 +316,53 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 16.dp, bottom = 2.dp)
                     )
+                }
+            }
+        }
+
+        // ─── Reminders ───────────────────────────────────
+        item {
+            SectionHeader("Reminders")
+        }
+
+        item {
+            var reminderInterval by remember { mutableStateOf(0) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            LaunchedEffect(Unit) {
+                reminderInterval = context.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+                    .getInt("reminder_interval", 0)
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Feeding Reminder",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Get a notification at regular intervals to remind you to feed baby.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val intervals = listOf(0 to "Off", 90 to "Every 1.5h", 120 to "Every 2h", 150 to "Every 2.5h", 180 to "Every 3h")
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        intervals.forEachIndexed { index, (mins, label) ->
+                            SegmentedButton(
+                                selected = reminderInterval == mins,
+                                onClick = {
+                                    reminderInterval = mins
+                                    viewModel.setReminderInterval(mins)
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index, intervals.size)
+                            ) { Text(label) }
+                        }
+                    }
                 }
             }
         }

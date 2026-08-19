@@ -31,6 +31,9 @@ class BabyRepository(context: Context) {
     private val weightDao = db.weightDao()
     private val milestoneDao = db.milestoneDao()
     private val chatDao = db.chatMessageDao()
+    private val diaperDao = db.diaperDao()
+    private val pumpingDao = db.pumpingDao()
+    private val healthRecordDao = db.healthRecordDao()
 
     // ── Children ──────────────────────────────────────
     fun children(): Flow<List<Child>> = childDao.getAll()
@@ -69,16 +72,37 @@ class BabyRepository(context: Context) {
     suspend fun markMessageRead(id: String) = chatDao.markRead(id)
     fun unreadCount(): Flow<Int> = chatDao.unreadCount()
 
+    // ── Diapers ──────────────────────────────────────
+    fun diapers(childId: String): Flow<List<Diaper>> = diaperDao.getByChild(childId)
+    suspend fun saveDiaper(d: Diaper) = diaperDao.insert(d)
+    suspend fun deleteDiaper(id: String) = diaperDao.delete(id)
+    suspend fun allDiapers(): List<Diaper> = diaperDao.getAll()
+
+    // ── Pumping ───────────────────────────────────────
+    fun pumpings(childId: String): Flow<List<Pumping>> = pumpingDao.getByChild(childId)
+    suspend fun savePumping(p: Pumping) = pumpingDao.insert(p)
+    suspend fun deletePumping(id: String) = pumpingDao.delete(id)
+    suspend fun allPumpings(): List<Pumping> = pumpingDao.getAll()
+
+    // ── Health records ────────────────────────────────
+    fun healthRecords(childId: String): Flow<List<HealthRecord>> = healthRecordDao.getByChild(childId)
+    suspend fun saveHealthRecord(r: HealthRecord) = healthRecordDao.insert(r)
+    suspend fun deleteHealthRecord(id: String) = healthRecordDao.delete(id)
+    suspend fun allHealthRecords(): List<HealthRecord> = healthRecordDao.getAll()
+
     // ── Backup / restore helpers ──────────────────────
     suspend fun collectAllData(): BackupPayload {
         return BackupPayload(
-            version = 1,
+            version = 2,
             exportedAt = System.currentTimeMillis(),
             children = childDao.getAll().first(),
             feedings = feedingDao.getAll(),
             sleeps = sleepDao.getAll(),
             weights = weightDao.getAll(),
-            milestones = milestoneDao.getAll()
+            milestones = milestoneDao.getAll(),
+            diapers = diaperDao.getAll(),
+            pumpings = pumpingDao.getAll(),
+            healthRecords = healthRecordDao.getAll()
         )
     }
 }
@@ -88,11 +112,14 @@ class BabyRepository(context: Context) {
  */
 @kotlinx.serialization.Serializable
 data class BackupPayload(
-    val version: Int = 1,
+    val version: Int = 2,
     val exportedAt: Long,
     val children: List<Child>,
     val feedings: List<Feeding>,
     val sleeps: List<Sleep>,
     val weights: List<Weight>,
-    val milestones: List<Milestone>
+    val milestones: List<Milestone>,
+    val diapers: List<Diaper> = emptyList(),
+    val pumpings: List<Pumping> = emptyList(),
+    val healthRecords: List<HealthRecord> = emptyList()
 )

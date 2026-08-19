@@ -17,21 +17,18 @@ import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
- * A weight + optional height measurement.
- * Weight stored in kg internally; height in cm.
- * Original unit preserved for display.
+ * A diaper/nappy change record.
+ * @param contents "wet", "dirty", "mixed", or "dry"
+ * @param color optional — for dirty diapers: "yellow", "brown", "green", "black"
  */
 @Serializable
-@Entity(tableName = "weights")
-data class Weight(
+@Entity(tableName = "diapers")
+data class Diaper(
     @PrimaryKey
     val id: String,
     val childId: String,
-    val date: Long,               // epoch millis
-    val value: Double,            // kg
-    val unit: String,             // "kg", "lb", "oz"
-    val height: Double? = null,   // cm
-    val heightUnit: String? = null, // "cm" or "in"
-    val headCirc: Double? = null,   // cm — head circumference
-    val headCircUnit: String? = null // "cm" or "in"
+    val time: Long,              // epoch millis
+    val contents: String,        // "wet", "dirty", "mixed", "dry"
+    val color: String? = null,   // stool color for dirty/mixed
+    val note: String? = null
 )

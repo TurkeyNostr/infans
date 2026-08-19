@@ -49,9 +49,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.turkbot.babytracker.BabyTrackerApp
 import com.turkbot.babytracker.ui.screens.ChartsScreen
+import com.turkbot.babytracker.ui.screens.DiaperScreen
 import com.turkbot.babytracker.ui.screens.FeedScreen
+import com.turkbot.babytracker.ui.screens.HealthScreen
 import com.turkbot.babytracker.ui.screens.MessagesScreen
 import com.turkbot.babytracker.ui.screens.MilestonesScreen
+import com.turkbot.babytracker.ui.screens.PumpingScreen
 import com.turkbot.babytracker.ui.screens.SettingsScreen
 import com.turkbot.babytracker.ui.screens.SleepScreen
 import com.turkbot.babytracker.ui.screens.SummaryScreen
@@ -142,7 +145,10 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                     viewModel,
                     onNavigateToWeight = { navController.navigate("weight") },
                     onNavigateToCharts = { navController.navigate("charts") },
-                    onNavigateToMilestones = { navController.navigate("milestones") }
+                    onNavigateToMilestones = { navController.navigate("milestones") },
+                    onNavigateToDiaper = { navController.navigate("diaper") },
+                    onNavigateToPumping = { navController.navigate("pumping") },
+                    onNavigateToHealth = { navController.navigate("health") }
                 )
             }
             composable(Screen.Feed.route) { FeedScreen(viewModel) }
@@ -150,6 +156,9 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             composable(Screen.Weight.route) { WeightScreen(viewModel) }
             composable("milestones") { MilestonesScreen(viewModel) }
             composable("charts") { ChartsScreen(viewModel) }
+            composable("diaper") { DiaperScreen(viewModel) }
+            composable("pumping") { PumpingScreen(viewModel) }
+            composable("health") { HealthScreen(viewModel) }
             composable(Screen.Messages.route) { MessagesScreen(viewModel, app.nostrManager) }
             composable("settings") { SettingsScreen(viewModel, app.nostrManager) }
         }

@@ -27,8 +27,11 @@ import com.turkbot.babytracker.data.entities.*
         Weight::class,
         Milestone::class,
         ChatMessage::class,
+        Diaper::class,
+        Pumping::class,
+        HealthRecord::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,6 +41,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun weightDao(): WeightDao
     abstract fun milestoneDao(): MilestoneDao
     abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun diaperDao(): DiaperDao
+    abstract fun pumpingDao(): PumpingDao
+    abstract fun healthRecordDao(): HealthRecordDao
 
     companion object {
         @Volatile
