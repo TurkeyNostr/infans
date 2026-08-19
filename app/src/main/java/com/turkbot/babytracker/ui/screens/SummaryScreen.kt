@@ -1,24 +1,47 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
@@ -26,7 +49,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun SummaryScreen(viewModel: BabyViewModel) {
+fun SummaryScreen(
+    viewModel: BabyViewModel,
+    onNavigateToWeight: () -> Unit = {},
+    onNavigateToCharts: () -> Unit = {},
+    onNavigateToMilestones: () -> Unit = {}
+) {
     val feedings by viewModel.feedings.collectAsState()
     val sleeps by viewModel.sleeps.collectAsState()
     val weights by viewModel.weights.collectAsState()
@@ -41,9 +69,6 @@ fun SummaryScreen(viewModel: BabyViewModel) {
     }
     val todaySleeps = sleeps.filter { s ->
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(s.start)) == today
-    }
-    val todayMilestones = milestones.filter { m ->
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(m.date)) == today
     }
 
     // 7-day trend data
@@ -81,144 +106,294 @@ fun SummaryScreen(viewModel: BabyViewModel) {
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        // Child info
+        // ── Hero child info card ──────────────────────────
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(child?.name ?: "No child selected", style = MaterialTheme.typography.titleLarge)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        child?.name ?: "No child selected",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                     if (child?.dob != null) {
-                        Text("Age: ${Units.ageFromDOB(child!!.dob)}", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Age: ${Units.ageFromDOB(child!!.dob)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
                     }
                 }
             }
         }
 
-        // Summary stats
+        // ── Quick action chips ─────────────────────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SummaryStatCard("Feedings Today", todayFeedings.size.toString(), Modifier.weight(1f))
-                SummaryStatCard("Sleep Today", Units.fmtDuration(todaySleeps.sumOf { it.duration }), Modifier.weight(1f))
+                QuickActionCard(
+                    icon = Icons.Default.MonitorWeight,
+                    label = "Weight",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToWeight
+                )
+                QuickActionCard(
+                    icon = Icons.Default.ShowChart,
+                    label = "Charts",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToCharts
+                )
+                QuickActionCard(
+                    icon = Icons.Default.EmojiEvents,
+                    label = "Milestones",
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToMilestones
+                )
             }
         }
+
+        // ── Today's stats ──────────────────────────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                SummaryStatCard("Milestones Today", todayMilestones.size.toString(), Modifier.weight(1f))
-                SummaryStatCard("Weight Records", weights.size.toString(), Modifier.weight(1f))
+                StatCard(
+                    icon = Icons.Default.Restaurant,
+                    label = "Feedings Today",
+                    value = todayFeedings.size.toString(),
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    icon = Icons.Default.Bedtime,
+                    label = "Sleep Today",
+                    value = Units.fmtDuration(todaySleeps.sumOf { it.duration }),
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
-        // Feeding trend bar chart
+        // ── Feeding trend ──────────────────────────────────
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Feeding Trend (7 days)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("feedings per day", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    BarChart(values = feedCounts.map { it.toDouble() }, labels = dayLabels, barColor = Color(0xFF6750A4))
+                    Text(
+                        "Feeding Trend",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "feedings per day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    BarChart(
+                        values = feedCounts.map { it.toDouble() },
+                        labels = dayLabels,
+                        barColor = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
 
-        // Sleep trend bar chart
+        // ── Sleep trend ────────────────────────────────────
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Sleep Trend (7 days)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("hours per day", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    BarChart(values = sleepHours, labels = dayLabels, barColor = Color(0xFF5B7CFA))
+                    Text(
+                        "Sleep Trend",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "hours per day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    BarChart(
+                        values = sleepHours,
+                        labels = dayLabels,
+                        barColor = MaterialTheme.colorScheme.tertiary
+                    )
                 }
             }
         }
 
-        // Today's feedings list
+        // ── Today's activity list ──────────────────────────
         item {
-            Text("Today's Feedings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Today's Activity",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
-        if (todayFeedings.isEmpty()) {
-            item { Text("No feedings logged today", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+
+        if (todayFeedings.isEmpty() && todaySleeps.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Text(
+                        "No activity logged today",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
+                    )
+                }
+            }
         } else {
             items(todayFeedings) { f ->
-                FeedingRow(f, timeFmt, onDelete = { viewModel.deleteFeeding(f.id) })
+                ActivityRow(
+                    icon = Icons.Default.Restaurant,
+                    title = Units.feedTypeLabel(f.type),
+                    subtitle = "${timeFmt.format(Date(f.time))}" +
+                        (if (f.amount != null && f.unit != null) " · ${Units.fmtAmount(f.amount, f.unit)}" else ""),
+                    onDelete = { viewModel.deleteFeeding(f.id) }
+                )
             }
-        }
-
-        // Today's sleep list
-        item {
-            Text("Today's Sleep", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        }
-        if (todaySleeps.isEmpty()) {
-            item { Text("No sleep logged today", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        } else {
             items(todaySleeps) { s ->
-                SleepRow(s, timeFmt, onDelete = { viewModel.deleteSleep(s.id) })
+                ActivityRow(
+                    icon = Icons.Default.Bedtime,
+                    title = "Sleep · ${Units.fmtDuration(s.duration)}",
+                    subtitle = timeFmt.format(Date(s.start)),
+                    onDelete = { viewModel.deleteSleep(s.id) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SummaryStatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
+private fun QuickActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(vertical = 16.dp, horizontal = 8.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
     }
 }
 
 @Composable
-private fun FeedingRow(f: Feeding, timeFmt: SimpleDateFormat, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+private fun StatCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column {
-                Text("${Units.feedTypeLabel(f.type)} · ${timeFmt.format(Date(f.time))}", style = MaterialTheme.typography.bodyMedium)
-                if (f.amount != null && f.unit != null) {
-                    Text(Units.fmtAmount(f.amount, f.unit), style = MaterialTheme.typography.bodySmall)
-                }
-                if (f.note != null) {
-                    Text(f.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
 
 @Composable
-private fun SleepRow(s: Sleep, timeFmt: SimpleDateFormat, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun ActivityRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("😴 ${timeFmt.format(Date(s.start))} · ${Units.fmtDuration(s.duration)}", style = MaterialTheme.typography.bodyMedium)
-                if (s.note != null) {
-                    Text(s.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -228,6 +403,7 @@ private fun SleepRow(s: Sleep, timeFmt: SimpleDateFormat, onDelete: () -> Unit) 
 private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color) {
     val maxVal = (values.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
     val todayIdx = values.lastIndex
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
 
     Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
         val w = size.width
@@ -244,7 +420,7 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
 
         // Axis line
         drawLine(
-            color = Color(0xFFCCCCCC),
+            color = onSurfaceVariant.copy(alpha = 0.2f),
             start = Offset(leftPad, baseline),
             end = Offset(w - rightPad, baseline),
             strokeWidth = 1f
@@ -255,7 +431,6 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
             val x = leftPad + i * slotW + gap / 2
             val y = baseline - barH
 
-            // Bar (today = full opacity, zero-value = 0.15, other = 0.7)
             val alpha = when {
                 i == todayIdx -> 1f
                 v == 0.0 -> 0.15f
@@ -264,8 +439,8 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
             drawRoundRect(
                 color = barColor.copy(alpha = alpha),
                 topLeft = Offset(x, y),
-                size = androidx.compose.ui.geometry.Size(barW, barH),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f)
+                size = Size(barW, barH),
+                cornerRadius = CornerRadius(6f, 6f)
             )
 
             // Value label above bar
@@ -292,7 +467,7 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
                     x + barW / 2,
                     baseline + 24f,
                     android.graphics.Paint().apply {
-                        color = if (i == todayIdx) barColor.toArgb() else Color(0xFF999999).toArgb()
+                        color = if (i == todayIdx) barColor.toArgb() else onSurfaceVariant.copy(alpha = 0.6f).toArgb()
                         textSize = 26f
                         isFakeBoldText = i == todayIdx
                         textAlign = android.graphics.Paint.Align.CENTER

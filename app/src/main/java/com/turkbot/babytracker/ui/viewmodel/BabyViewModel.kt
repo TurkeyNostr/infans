@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.viewmodel
 
 import android.app.Application
@@ -51,8 +63,9 @@ class BabyViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // Nostr state
-    val nostrKeys = nostr.keys
+    val signer = nostr.signer
     val relayConnected = nostr.relayConnected
+    val partnerNpub = nostr.partnerNpub
 
     // ── Child management ──────────────────────────────
     fun selectChild(id: String) { _activeChildId.value = id }
@@ -180,6 +193,20 @@ class BabyViewModel(
     fun importNostrIdentity(nsec: String) {
         viewModelScope.launch { nostr.importIdentity(nsec) }
     }
+
+    fun loginWithAmber() {
+        viewModelScope.launch { nostr.loginWithAmber() }
+    }
+
+    fun clearNostrIdentity() {
+        nostr.clearIdentity()
+    }
+
+    fun setPartnerNpub(npub: String?) {
+        nostr.setPartnerNpub(npub)
+    }
+
+    fun isAmberInstalled(): Boolean = nostr.isAmberInstalled()
 
     fun sendDirectMessage(text: String, recipientNpub: String) {
         viewModelScope.launch { nostr.sendMessage(text, recipientNpub) }

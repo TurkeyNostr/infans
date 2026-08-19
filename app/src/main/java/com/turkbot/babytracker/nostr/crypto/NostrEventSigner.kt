@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.nostr.crypto
 
 import fr.acinq.secp256k1.Secp256k1
@@ -31,6 +43,21 @@ object NostrEventSigner {
      */
     fun signSchnorr(id: ByteArray, privKey: ByteArray): ByteArray {
         return secp.signSchnorr(id, privKey, null)
+    }
+
+    /**
+     * Verify a Schnorr (BIP-340) signature.
+     * @param id        the 32-byte message hash (event id)
+     * @param signature the 64-byte Schnorr signature
+     * @param pubKey    the 32-byte x-only public key
+     * @return true if the signature is valid
+     */
+    fun verifySchnorr(id: ByteArray, signature: ByteArray, pubKey: ByteArray): Boolean {
+        return try {
+            secp.verifySchnorr(signature, id, pubKey)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     // ─── JSON helpers (manual, no external dep) ───────────

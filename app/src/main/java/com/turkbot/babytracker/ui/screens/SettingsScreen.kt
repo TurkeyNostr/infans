@@ -1,10 +1,26 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,52 +30,138 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.nostr.NostrManager
-import com.turkbot.babytracker.nostr.crypto.NostrKeys
+import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     val children by viewModel.children.collectAsState()
-    val keys by nostrManager.keys.collectAsState()
+    val signer by nostrManager.signer.collectAsState()
     val relayConnected by nostrManager.relayConnected.collectAsState()
+    val currentRelays by nostrManager.currentRelays.collectAsState()
     val scope = rememberCoroutineScope()
 
     var showAddChild by remember { mutableStateOf(false) }
     var showImportKey by remember { mutableStateOf(false) }
     var nsecInput by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var amberError by rememberSaveable { mutableStateOf<String?>(null) }
+    var partnerNpubInput by rememberSaveable { mutableStateOf("") }
+    var partnerError by rememberSaveable { mutableStateOf<String?>(null) }
 
     val dateFmt = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+    val amberInstalled = remember { viewModel.isAmberInstalled() }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         // ─── Nostr Identity ─────────────────────────────
         item {
-            Text("Nostr Identity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SectionHeader("Nostr Identity")
         }
 
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    if (keys != null) {
-                        Text("Your npub:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(keys!!.npub, style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Share this with the other parent so they can send you messages.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        Text("No Nostr identity yet.", style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.generateNostrIdentity() }) {
-                                Text("Generate New")
+                    if (signer != null) {
+                        Text(
+                            "Your npub",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(signer!!.npub, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(12.dp))
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text(
+                                    if (signer!!.type == SignerType.AMBER) "Amber (NIP-55)" else "Local key"
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
-                            OutlinedButton(onClick = { showImportKey = true }) {
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Share this npub with the other parent so they can send you messages.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.clearNostrIdentity() },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Log Out / Reset")
+                        }
+                    } else {
+                        Text(
+                            "No Nostr identity yet.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { viewModel.generateNostrIdentity() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Key, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Generate New Key")
+                            }
+                            OutlinedButton(
+                                onClick = { showImportKey = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text("Import nsec")
+                            }
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            if (amberInstalled) {
+                                Button(
+                                    onClick = {
+                                        amberError = null
+                                        scope.launch {
+                                            val result = nostrManager.loginWithAmber()
+                                            if (result == null) {
+                                                amberError = "Amber login failed or was denied"
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.AccountCircle, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Log in with Amber")
+                                }
+                            } else {
+                                Text(
+                                    "Install the Amber app for NIP-55 signer support (key stays in Amber).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (amberError != null) {
+                                Text(
+                                    amberError!!,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                         }
                     }
@@ -67,18 +169,151 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             }
         }
 
-        // Relay status
+        // ─── Partner Sync ─────────────────────────────────
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            SectionHeader("Partner Sync")
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    if (signer != null) {
+                        Text(
+                            "Link with the other parent to share baby data automatically. " +
+                                "When either of you adds a feeding, sleep, or weight, the other " +
+                                "phone receives it on next sync.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+
+                        val currentPartner by viewModel.partnerNpub.collectAsState()
+                        if (currentPartner != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    currentPartner!!.take(24) + "...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.setPartnerNpub(null)
+                                    partnerNpubInput = ""
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Unlink Partner")
+                            }
+                        } else {
+                            OutlinedTextField(
+                                value = partnerNpubInput,
+                                onValueChange = {
+                                    partnerNpubInput = it
+                                    partnerError = null
+                                },
+                                label = { Text("Partner's npub") },
+                                placeholder = { Text("npub1...") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (partnerError != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    partnerError!!,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    val input = partnerNpubInput.trim()
+                                    if (!input.startsWith("npub1")) {
+                                        partnerError = "Enter a valid npub (starts with npub1...)"
+                                    } else {
+                                        viewModel.setPartnerNpub(input)
+                                        partnerNpubInput = ""
+                                        // Trigger a backup so the partner gets our data immediately
+                                        viewModel.exportBackup()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Link Partner")
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Sign in with a Nostr identity first to enable partner sync.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // ─── Relay Status ────────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Row(
                     modifier = Modifier.padding(16.dp).fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Relay Status")
+                    Text("Relay Status", style = MaterialTheme.typography.bodyLarge)
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(if (relayConnected) "Connected" else "Disconnected")
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (relayConnected)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.errorContainer,
+                            labelColor = if (relayConnected)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else
+                                MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    )
+                }
+            }
+        }
+
+        item {
+            // ─── Active Relay List ────────────────────────────
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                currentRelays.forEach { url ->
                     Text(
-                        if (relayConnected) "🟢 Connected" else "🔴 Disconnected",
-                        color = if (relayConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        text = url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 2.dp)
                     )
                 }
             }
@@ -86,14 +321,23 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
 
         // ─── Backup ──────────────────────────────────────
         item {
-            Text("Encrypted Backup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SectionHeader("Encrypted Backup")
         }
 
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("All data is encrypted (NIP-44) and backed up to Nostr relays as kind 30078 events.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "All data is encrypted (NIP-44) and backed up to Nostr relays as kind 30078 events.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
                     Button(onClick = { viewModel.exportBackup() }) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
@@ -105,23 +349,36 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
 
         // ─── Children ────────────────────────────────────
         item {
-            Text("Children", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SectionHeader("Children")
         }
 
         items(children) { child ->
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
                 Row(
-                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(child.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(child.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                         if (child.dob != null) {
-                            Text("DOB: ${dateFmt.format(Date(child.dob))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "DOB: ${dateFmt.format(Date(child.dob))}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         if (child.gender != null) {
-                            Text("Gender: ${child.gender}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "Gender: ${child.gender}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     TextButton(onClick = { viewModel.deleteChild(child) }) {
@@ -132,7 +389,10 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         }
 
         item {
-            OutlinedButton(onClick = { showAddChild = true }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { showAddChild = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Add Child")
@@ -191,6 +451,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             }
         )
     }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 8.dp)
+    )
 }
 
 @Composable

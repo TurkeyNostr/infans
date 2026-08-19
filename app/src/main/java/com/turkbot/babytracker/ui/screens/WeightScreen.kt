@@ -1,38 +1,31 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Weight
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -47,161 +40,122 @@ fun WeightScreen(viewModel: BabyViewModel) {
     val weights by viewModel.weights.collectAsState()
     var weightInput by remember { mutableStateOf("") }
     var weightUnit by remember { mutableStateOf("kg") }
-    var weightUnitExpanded by remember { mutableStateOf(false) }
     var heightInput by remember { mutableStateOf("") }
     var heightUnit by remember { mutableStateOf("cm") }
-    var heightUnitExpanded by remember { mutableStateOf(false) }
 
     val weightUnits = listOf("kg", "lb", "oz")
     val heightUnits = listOf("cm", "in")
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        Text(
-            text = "Log Weight and Height",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        // ── Weight input row ──────────────────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = weightInput,
-                onValueChange = { weightInput = it },
-                label = { Text("Weight") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-            ExposedDropdownMenuBox(
-                expanded = weightUnitExpanded,
-                onExpandedChange = { weightUnitExpanded = it },
-                modifier = Modifier.weight(0.5f)
-            ) {
-                OutlinedTextField(
-                    value = weightUnit,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Unit") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = weightUnitExpanded)
-                    },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
+        // ── Form card ──────────────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
-                ExposedDropdownMenu(
-                    expanded = weightUnitExpanded,
-                    onDismissRequest = { weightUnitExpanded = false }
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    weightUnits.forEach { unit ->
-                        DropdownMenuItem(
-                            text = { Text(unit) },
-                            onClick = {
-                                weightUnit = unit
-                                weightUnitExpanded = false
+                    Text(
+                        "Log Measurement",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Weight value + unit segmented buttons
+                    OutlinedTextField(
+                        value = weightInput,
+                        onValueChange = { weightInput = it },
+                        label = { Text("Weight") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        weightUnits.forEachIndexed { index, unit ->
+                            SegmentedButton(
+                                selected = weightUnit == unit,
+                                onClick = { weightUnit = unit },
+                                shape = SegmentedButtonDefaults.itemShape(index, weightUnits.size)
+                            ) { Text(unit) }
+                        }
+                    }
+
+                    // Height (optional) + unit segmented buttons
+                    OutlinedTextField(
+                        value = heightInput,
+                        onValueChange = { heightInput = it },
+                        label = { Text("Height (optional)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        heightUnits.forEachIndexed { index, unit ->
+                            SegmentedButton(
+                                selected = heightUnit == unit,
+                                onClick = { heightUnit = unit },
+                                shape = SegmentedButtonDefaults.itemShape(index, heightUnits.size)
+                            ) { Text(unit) }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val weightValue = weightInput.trim().toDoubleOrNull()
+                            if (weightValue != null) {
+                                val valueKg = Units.toKg(weightValue, weightUnit)
+                                val heightCm: Double? = heightInput.trim().toDoubleOrNull()?.let {
+                                    Units.toCm(it, heightUnit)
+                                }
+                                val hUnit = if (heightCm != null) heightUnit else null
+                                viewModel.addWeight(valueKg, weightUnit, heightCm, hUnit)
+                                weightInput = ""
+                                heightInput = ""
                             }
-                        )
+                        },
+                        enabled = weightInput.trim().toDoubleOrNull() != null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.MonitorWeight, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Save Measurement")
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Height input row (optional) ───────────────────
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedTextField(
-                value = heightInput,
-                onValueChange = { heightInput = it },
-                label = { Text("Height (optional)") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
-            )
-            ExposedDropdownMenuBox(
-                expanded = heightUnitExpanded,
-                onExpandedChange = { heightUnitExpanded = it },
-                modifier = Modifier.weight(0.5f)
-            ) {
-                OutlinedTextField(
-                    value = heightUnit,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Unit") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = heightUnitExpanded)
-                    },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = heightUnitExpanded,
-                    onDismissRequest = { heightUnitExpanded = false }
-                ) {
-                    heightUnits.forEach { unit ->
-                        DropdownMenuItem(
-                            text = { Text(unit) },
-                            onClick = {
-                                heightUnit = unit
-                                heightUnitExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                val weightValue = weightInput.trim().toDoubleOrNull()
-                if (weightValue != null) {
-                    val valueKg = Units.toKg(weightValue, weightUnit)
-                    val heightCm: Double? = heightInput.trim().toDoubleOrNull()?.let {
-                        Units.toCm(it, heightUnit)
-                    }
-                    val hUnit = if (heightCm != null) heightUnit else null
-                    viewModel.addWeight(valueKg, weightUnit, heightCm, hUnit)
-                    weightInput = ""
-                    heightInput = ""
-                }
-            },
-            enabled = weightInput.trim().toDoubleOrNull() != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Save Measurement")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // ── Weight history ────────────────────────────────
+        // ── Weight history ─────────────────────────────────
         if (weights.isEmpty()) {
-            Text(
-                text = "No weight measurements recorded yet.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 24.dp)
-            )
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(weights, key = { it.id }) { weight ->
-                    WeightCard(
-                        weight = weight,
-                        onDelete = { viewModel.deleteWeight(weight.id) }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Text(
+                        "No weight measurements recorded yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
                     )
                 }
+            }
+        } else {
+            items(weights, key = { it.id }) { weight ->
+                WeightCard(
+                    weight = weight,
+                    onDelete = { viewModel.deleteWeight(weight.id) }
+                )
             }
         }
     }
@@ -212,40 +166,42 @@ private fun WeightCard(
     weight: Weight,
     onDelete: () -> Unit
 ) {
-    val dateFormat = remember { SimpleDateFormat("MMM d yyyy", Locale.getDefault()) }
+    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     val formattedDate = remember(weight.date) {
         dateFormat.format(Date(weight.date))
     }
 
     Card(
-        colors = CardDefaults.cardColors(),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
-            Text(
-                text = "\uD83D\uDCCE",
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(end = 12.dp)
+            Icon(
+                imageVector = Icons.Default.MonitorWeight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
             )
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = Units.fromKg(weight.value, weight.unit),
+                    Units.fromKg(weight.value, weight.unit),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = formattedDate,
+                    formattedDate,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (weight.height != null && weight.heightUnit != null) {
                     Text(
-                        text = Units.fmtHeight(weight.height, weight.heightUnit),
+                        Units.fmtHeight(weight.height, weight.heightUnit),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -253,8 +209,9 @@ private fun WeightCard(
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = "Delete weight measurement"
+                    Icons.Default.Delete,
+                    contentDescription = "Delete weight measurement",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

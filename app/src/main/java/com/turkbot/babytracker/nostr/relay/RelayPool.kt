@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.nostr.relay
 
 import android.util.Log
@@ -11,12 +23,16 @@ import okhttp3.OkHttpClient
  * Manages multiple relay connections in parallel.
  * Events from all relays are merged into a single flow.
  * Publishes go to all connected relays for redundancy.
+ *
+ * Relay list can be swapped at runtime via [reconfigure] — e.g. when a user's
+ * NIP-65 relay preferences are fetched after Amber sign-in.
  */
 class RelayPool(
-    relayUrls: List<String>,
+    initialRelays: List<String>,
     private val client: OkHttpClient
 ) {
-    private val connections = relayUrls.map { RelayConnection(it, client) }
+    private var relayUrls = initialRelays
+    private var connections = relayUrls.map { RelayConnection(it, client) }
 
     private val _events = MutableSharedFlow<NostrEventWrapper>(extraBufferCapacity = 64)
     val events: SharedFlow<NostrEventWrapper> = _events
@@ -25,6 +41,8 @@ class RelayPool(
 
     // Collect from all connections
     private var collectJob: Job? = null
+
+    val currentRelays: List<String> get() = relayUrls
 
     fun connect() {
         connections.forEach { it.connect() }
@@ -43,6 +61,28 @@ class RelayPool(
     fun disconnect() {
         collectJob?.cancel()
         connections.forEach { it.disconnect() }
+    }
+
+    /**
+     * Swap the relay set at runtime.
+     * Disconnects old connections, creates new ones, reconnects, and re-subscribes
+     * with all previously active subscription filters.
+     */
+    fun reconfigure(newUrls: List<String>) {
+        if (newUrls.isEmpty() || newUrls == relayUrls) return
+
+        // Capture active subscriptions before tearing down
+        val activeSubs = connections.flatMap { it.getActiveSubscriptions() }
+
+        disconnect()
+        relayUrls = newUrls
+        connections = newUrls.map { RelayConnection(it, client) }
+        connect()
+
+        // Re-apply subscriptions on the new relays
+        activeSubs.forEach { (subId, filter) ->
+            connections.forEach { it.subscribe(subId, filter) }
+        }
     }
 
     fun publish(eventJson: String) {

@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.Canvas
@@ -18,22 +30,24 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.data.entities.Weight
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.WhoPercentiles
 
-private val BAND_COLOR = Color(0x226750A4)
-private val P50_COLOR = Color(0xFF6750A4)
-private val P3_P97_COLOR = Color(0xFF9E97C4)
-private val BABY_LINE_COLOR = Color(0xFFD0BCFF)
-private val BABY_DOT_COLOR = Color(0xFF6750A4)
-private val AXIS_COLOR = Color(0xFFB0B0B0)
-private val GRID_COLOR = Color(0x33888888)
-
 private const val MIN_AGE = 0.0
 private const val MAX_AGE = 24.0
+
+private data class ChartColors(
+    val band: Color,
+    val p50: Color,
+    val p3p97: Color,
+    val babyLine: Color,
+    val babyDot: Color,
+    val axis: Color,
+    val grid: Color,
+    val labelBg: Color
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +55,21 @@ fun ChartsScreen(viewModel: BabyViewModel) {
     val weights by viewModel.weights.collectAsState()
     val activeChild by viewModel.activeChild.collectAsState()
     var unit by remember { mutableStateOf("kg") }
+
+    // Theme-aware colors for the chart
+    val colorScheme = MaterialTheme.colorScheme
+    val chartColors = remember(colorScheme) {
+        ChartColors(
+            band = colorScheme.primary.copy(alpha = 0.13f),
+            p50 = colorScheme.primary,
+            p3p97 = colorScheme.outline,
+            babyLine = colorScheme.primary,
+            babyDot = colorScheme.primary,
+            axis = colorScheme.outlineVariant,
+            grid = colorScheme.outlineVariant.copy(alpha = 0.3f),
+            labelBg = colorScheme.surface.copy(alpha = 0.9f)
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -104,6 +133,7 @@ fun ChartsScreen(viewModel: BabyViewModel) {
                 dob = dob,
                 gender = gender,
                 unit = unit,
+                colors = chartColors,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(280.dp)
@@ -113,7 +143,7 @@ fun ChartsScreen(viewModel: BabyViewModel) {
         Spacer(Modifier.height(16.dp))
 
         // Legend
-        LegendRow()
+        LegendRow(chartColors)
 
         Spacer(Modifier.height(12.dp))
 
@@ -134,15 +164,15 @@ fun ChartsScreen(viewModel: BabyViewModel) {
 }
 
 @Composable
-private fun LegendRow() {
+private fun LegendRow(colors: ChartColors) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LegendSwatch(color = BAND_COLOR, label = "P3–P97")
-        LegendDashedLine(color = P50_COLOR, label = "P50")
-        LegendDottedLine(color = P3_P97_COLOR, label = "P3/P97")
-        LegendSwatch(color = BABY_DOT_COLOR, label = "Baby")
+        LegendSwatch(color = colors.band, label = "P3–P97")
+        LegendDashedLine(color = colors.p50, label = "P50")
+        LegendDottedLine(color = colors.p3p97, label = "P3/P97")
+        LegendSwatch(color = colors.babyDot, label = "Baby")
     }
 }
 
@@ -201,6 +231,7 @@ private fun GrowthChart(
     dob: Long,
     gender: String,
     unit: String,
+    colors: ChartColors,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -231,6 +262,7 @@ private fun GrowthChart(
             yMax = yMax,
             yMin = yMin,
             unit = unit,
+            colors = colors,
             textMeasurer = textMeasurer
         )
     }
@@ -282,6 +314,7 @@ private fun DrawScope.drawGrowthChart(
     yMax: Double,
     yMin: Double,
     unit: String,
+    colors: ChartColors,
     textMeasurer: TextMeasurer
 ) {
     if (size.width <= 0f || size.height <= 0f) return
@@ -315,7 +348,7 @@ private fun DrawScope.drawGrowthChart(
         val v = yMin + (yMax - yMin) * i / ySteps
         val y = yForValue(v)
         drawLine(
-            color = GRID_COLOR,
+            color = colors.grid,
             start = Offset(chartLeft, y),
             end = Offset(chartRight, y),
             strokeWidth = 1f
@@ -323,7 +356,7 @@ private fun DrawScope.drawGrowthChart(
         val label = formatAxisValue(v, unit)
         val layout = textMeasurer.measure(
             buildAnnotatedString { append(label) },
-            style = TextStyle(fontSize = 9.sp, color = AXIS_COLOR)
+            style = TextStyle(fontSize = 9.sp, color = colors.axis)
         )
         drawText(
             layout,
@@ -338,14 +371,14 @@ private fun DrawScope.drawGrowthChart(
     listOf(0, 6, 12, 18, 24).forEach { age ->
         val x = xForAge(age.toDouble())
         drawLine(
-            color = GRID_COLOR,
+            color = colors.grid,
             start = Offset(x, chartTop),
             end = Offset(x, chartBottom),
             strokeWidth = 1f
         )
         val layout = textMeasurer.measure(
             buildAnnotatedString { append("$age") },
-            style = TextStyle(fontSize = 9.sp, color = AXIS_COLOR)
+            style = TextStyle(fontSize = 9.sp, color = colors.axis)
         )
         drawText(
             layout,
@@ -359,7 +392,7 @@ private fun DrawScope.drawGrowthChart(
     // X axis title
     val xTitle = textMeasurer.measure(
         buildAnnotatedString { append("Age (months)") },
-        style = TextStyle(fontSize = 9.sp, color = AXIS_COLOR)
+        style = TextStyle(fontSize = 9.sp, color = colors.axis)
     )
     drawText(
         xTitle,
@@ -371,13 +404,13 @@ private fun DrawScope.drawGrowthChart(
 
     // ── Axis frame ─────────────────────────────────
     drawLine(
-        color = AXIS_COLOR,
+        color = colors.axis,
         start = Offset(chartLeft, chartTop),
         end = Offset(chartLeft, chartBottom),
         strokeWidth = 1.5f
     )
     drawLine(
-        color = AXIS_COLOR,
+        color = colors.axis,
         start = Offset(chartLeft, chartBottom),
         end = Offset(chartRight, chartBottom),
         strokeWidth = 1.5f
@@ -401,7 +434,7 @@ private fun DrawScope.drawGrowthChart(
         }
         close()
     }
-    drawPath(bandPath, color = BAND_COLOR)
+    drawPath(bandPath, color = colors.band)
 
     // ── P50 dashed line ────────────────────────────
     val p50Path = Path().apply {
@@ -413,7 +446,7 @@ private fun DrawScope.drawGrowthChart(
     }
     drawPath(
         p50Path,
-        color = P50_COLOR,
+        color = colors.p50,
         style = Stroke(
             width = 2f,
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 5f))
@@ -430,7 +463,7 @@ private fun DrawScope.drawGrowthChart(
                 if (i == 0) moveTo(x, y) else lineTo(x, y)
             }
         }
-        drawPath(path, color = P3_P97_COLOR, style = Stroke(width = 1.5f, pathEffect = dottedEffect))
+        drawPath(path, color = colors.p3p97, style = Stroke(width = 1.5f, pathEffect = dottedEffect))
     }
 
     if (points.isEmpty()) return
@@ -443,13 +476,13 @@ private fun DrawScope.drawGrowthChart(
             if (i == 0) moveTo(x, y) else lineTo(x, y)
         }
     }
-    drawPath(babyPath, color = BABY_LINE_COLOR, style = Stroke(width = 2.5f))
+    drawPath(babyPath, color = colors.babyLine, style = Stroke(width = 2.5f))
 
     // ── Baby weight dots ───────────────────────────
     points.forEach { (age, v) ->
         val x = xForAge(age)
         val y = yForValue(v)
-        drawCircle(color = BABY_DOT_COLOR, radius = 4f, center = Offset(x, y))
+        drawCircle(color = colors.babyDot, radius = 4f, center = Offset(x, y))
         drawCircle(color = Color.White, radius = 2f, center = Offset(x, y))
     }
 
@@ -469,8 +502,8 @@ private fun DrawScope.drawGrowthChart(
         buildAnnotatedString { append(label) },
         style = TextStyle(
             fontSize = 10.sp,
-            color = BABY_DOT_COLOR,
-            background = Color(0xCCFFFFFF)
+            color = colors.babyDot,
+            background = colors.labelBg
         )
     )
     // Place label above-right of the dot, clamp to chart bounds

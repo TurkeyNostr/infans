@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.layout.*
@@ -5,12 +17,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Sleep
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -25,7 +40,6 @@ fun SleepScreen(viewModel: BabyViewModel) {
     val sleeps by viewModel.sleeps.collectAsState()
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-    // ── Form state ───────────────────────────────────
     var startText by remember {
         mutableStateOf(
             SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis()))
@@ -47,124 +61,119 @@ fun SleepScreen(viewModel: BabyViewModel) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        // ── Form Card ─────────────────────────────────
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        // ── Form card ──────────────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
             ) {
-                Text(
-                    text = "Log Sleep Session",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                // Start time field (pre-filled with current time)
-                OutlinedTextField(
-                    value = startText,
-                    onValueChange = { startText = it },
-                    label = { Text("Start time (HH:mm)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Duration: hours + minutes side by side
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = hoursText,
-                        onValueChange = { hoursText = it.filter { c -> c.isDigit() } },
-                        label = { Text("Hours") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
+                    Text(
+                        "Log Sleep Session",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
+
                     OutlinedTextField(
-                        value = minutesText,
-                        onValueChange = { minutesText = it.filter { c -> c.isDigit() } },
-                        label = { Text("Minutes") },
+                        value = startText,
+                        onValueChange = { startText = it },
+                        label = { Text("Start time (HH:mm)") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
 
-                // Optional note
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    label = { Text("Note (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = hoursText,
+                            onValueChange = { hoursText = it.filter { c -> c.isDigit() } },
+                            label = { Text("Hours") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = minutesText,
+                            onValueChange = { minutesText = it.filter { c -> c.isDigit() } },
+                            label = { Text("Minutes") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        val h = hoursText.toIntOrNull() ?: 0
-                        val m = minutesText.toIntOrNull() ?: 0
-                        val totalMinutes = h * 60 + m
-                        if (totalMinutes > 0) {
-                            viewModel.addSleep(
-                                start = parseStartToEpoch(startText),
-                                duration = totalMinutes,
-                                note = noteText.ifBlank { null }
-                            )
-                            // Reset form
-                            hoursText = ""
-                            minutesText = ""
-                            noteText = ""
-                            startText = SimpleDateFormat("HH:mm", Locale.getDefault())
-                                .format(Date(System.currentTimeMillis()))
-                        }
-                    },
-                    enabled = (hoursText.toIntOrNull() ?: 0) * 60 + (minutesText.toIntOrNull() ?: 0) > 0,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Log Sleep")
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        label = { Text("Note (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val totalMinutes = (hoursText.toIntOrNull() ?: 0) * 60 + (minutesText.toIntOrNull() ?: 0)
+                    Button(
+                        onClick = {
+                            if (totalMinutes > 0) {
+                                viewModel.addSleep(
+                                    start = parseStartToEpoch(startText),
+                                    duration = totalMinutes,
+                                    note = noteText.ifBlank { null }
+                                )
+                                hoursText = ""
+                                minutesText = ""
+                                noteText = ""
+                                startText = SimpleDateFormat("HH:mm", Locale.getDefault())
+                                    .format(Date(System.currentTimeMillis()))
+                            }
+                        },
+                        enabled = totalMinutes > 0,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Bedtime, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Log Sleep")
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // ── Sleep sessions list ────────────────────────
+        // ── Sleep sessions list ────────────────────────────
         if (sleeps.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No sleep sessions logged yet",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(sleeps, key = { it.id }) { sleep ->
-                    SleepCard(
-                        sleep = sleep,
-                        timeFormat = timeFormat,
-                        onDelete = { viewModel.deleteSleep(sleep.id) }
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Text(
+                        "No sleep sessions logged yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(24.dp)
                     )
                 }
+            }
+        } else {
+            items(sleeps, key = { it.id }) { sleep ->
+                SleepCard(
+                    sleep = sleep,
+                    timeFormat = timeFormat,
+                    onDelete = { viewModel.deleteSleep(sleep.id) }
+                )
             }
         }
     }
@@ -178,29 +187,29 @@ private fun SleepCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = timeFormat.format(Date(sleep.start)),
-                    style = MaterialTheme.typography.titleMedium
+                    timeFormat.format(Date(sleep.start)),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = Units.fmtDuration(sleep.duration),
+                    Units.fmtDuration(sleep.duration),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (!sleep.note.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = sleep.note,
+                        sleep.note,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -208,7 +217,7 @@ private fun SleepCard(
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    Icons.Default.Delete,
                     contentDescription = "Delete sleep session",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

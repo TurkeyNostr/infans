@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.layout.*
@@ -5,13 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.ChatMessage
 import com.turkbot.babytracker.nostr.NostrManager
@@ -20,16 +32,16 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     val messages by viewModel.messages.collectAsState()
-    val keys by nostrManager.keys.collectAsState()
+    val signer by nostrManager.signer.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     var inputText by rememberSaveable { mutableStateOf("") }
     var partnerNpub by rememberSaveable { mutableStateOf("") }
-    var showSetupDialog by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
 
     val timeFmt = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
@@ -41,7 +53,7 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         }
     }
 
-    if (keys == null) {
+    if (signer == null) {
         // No Nostr identity — show setup prompt
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -53,7 +65,8 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             Text(
                 "Generate a Nostr key in Settings to enable encrypted parent-to-parent messaging.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
         }
         return
@@ -64,7 +77,8 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(vertical = 12.dp)
         ) {
             if (messages.isEmpty()) {
                 item {
@@ -72,12 +86,13 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         "No messages yet. Share your npub with the other parent and their npub here to start chatting.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.padding(16.dp)
                     )
                 }
             }
             items(messages) { msg ->
-                val myPubkeyHex = com.turkbot.babytracker.nostr.crypto.NostrKeys.toHex(keys!!.publicKey)
+                val myPubkeyHex = signer!!.pubkeyHex
                 MessageBubble(msg, timeFmt, isMe = msg.senderPubkey == myPubkeyHex)
             }
         }
@@ -104,40 +119,46 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         }
 
         // Input bar
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            tonalElevation = 3.dp,
+            color = MaterialTheme.colorScheme.surfaceContainer
         ) {
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                placeholder = { Text("Message...") },
-                modifier = Modifier.weight(1f),
-                maxLines = 3
-            )
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = {
-                    val recipient = nostrManager.partnerNpub ?: partnerNpub.trim()
-                    if (recipient.isEmpty() || inputText.isBlank()) {
-                        error = "Enter partner's npub and a message"
-                        return@IconButton
-                    }
-                    error = null
-                    scope.launch {
-                        val success = nostrManager.sendMessage(inputText, recipient)
-                        if (success) {
-                            inputText = ""
-                            if (nostrManager.partnerNpub == null) {
-                                nostrManager.partnerNpub = partnerNpub.trim()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("Message...") },
+                    modifier = Modifier.weight(1f),
+                    maxLines = 3,
+                    shape = MaterialTheme.shapes.large
+                )
+                Spacer(Modifier.width(8.dp))
+                FilledIconButton(
+                    onClick = {
+                        val recipient = nostrManager.partnerNpub.value ?: partnerNpub.trim()
+                        if (recipient.isEmpty() || inputText.isBlank()) {
+                            error = "Enter partner's npub and a message"
+                            return@FilledIconButton
+                        }
+                        error = null
+                        scope.launch {
+                            val success = nostrManager.sendMessage(inputText, recipient)
+                            if (success) {
+                                inputText = ""
+                                if (nostrManager.partnerNpub.value == null && partnerNpub.isNotBlank()) {
+                                    nostrManager.setPartnerNpub(partnerNpub.trim())
+                                }
+                            } else {
+                                error = "Failed to send — check relay connection"
                             }
-                        } else {
-                            error = "Failed to send — check relay connection"
                         }
                     }
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
                 }
-            ) {
-                Icon(Icons.Default.Send, contentDescription = "Send")
             }
         }
     }
@@ -150,20 +171,21 @@ private fun MessageBubble(msg: ChatMessage, timeFmt: SimpleDateFormat, isMe: Boo
         horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium,
+            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.large,
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     msg.content,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Text(
                     timeFmt.format(Date(msg.createdAt)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                           else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
             }
         }

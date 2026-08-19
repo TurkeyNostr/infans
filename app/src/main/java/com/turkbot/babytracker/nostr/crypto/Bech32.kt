@@ -1,3 +1,15 @@
+/**
+ * Baby Tracker — Native Android (Kotlin)
+ *
+ * A privacy-first baby tracking app with Nostr-based encrypted storage
+ * and parent-to-parent messaging.
+ *
+ * Copyright (c) 2026 Turkey
+ *
+ * Licensed under the MIT License. See the LICENSE file in the project root
+ * for full license details.
+ */
+
 package com.turkbot.babytracker.nostr.crypto
 
 /**
@@ -85,8 +97,8 @@ object Bech32 {
             idx
         }
         // Verify checksum
-        val values = bech32HrpExpand(hrp) + data
-        if (bech32Polymod(values.toIntArray()) != 1) throw IllegalArgumentException("Invalid checksum")
+        val values = bech32HrpExpand(hrp) + data.toIntArray()
+        if (bech32Polymod(values) != 1) throw IllegalArgumentException("Invalid checksum")
         val dataWithoutChecksum = data.dropLast(6)
         // Convert 5-bit values to 8-bit bytes
         val converted = convertBitsFromInts(dataWithoutChecksum.toIntArray(), 5, 8, false)
