@@ -78,15 +78,10 @@ class BackupService(
                 signer = signer,
                 tags = listOf(
                     listOf("d", BACKUP_D_TAG),
-                    listOf("client", "Baby Tracker", "1.0.0"),
+                    listOf("client", "Infans", "1.0.0"),
                     listOf("encrypted", "nip44"),
                     listOf("compression", "gzip"),
-                    listOf("backup_version", "1"),
-                    listOf("child_count", payload.children.size.toString()),
-                    listOf("feeding_count", payload.feedings.size.toString()),
-                    listOf("sleep_count", payload.sleeps.size.toString()),
-                    listOf("weight_count", payload.weights.size.toString()),
-                    listOf("milestone_count", payload.milestones.size.toString())
+                    listOf("backup_version", "1")
                 )
             )
 
@@ -187,7 +182,7 @@ class BackupService(
                 tags = listOf(
                     listOf("d", PARTNER_SYNC_D_TAG),
                     listOf("p", partnerPubkeyHex),
-                    listOf("client", "Baby Tracker", "1.0.0"),
+                    listOf("client", "Infans", "1.0.0"),
                     listOf("encrypted", "nip44"),
                     listOf("compression", "gzip"),
                     listOf("backup_version", "1")

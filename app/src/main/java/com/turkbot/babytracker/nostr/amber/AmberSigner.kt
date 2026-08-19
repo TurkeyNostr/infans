@@ -166,7 +166,7 @@ class AmberSigner(
                     val pubBytes = com.turkbot.babytracker.nostr.crypto.NostrKeys.fromHex(pubkeyHex)
                     com.turkbot.babytracker.nostr.crypto.NostrKeys.encodeNpub(pubBytes)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Invalid pubkey hex from signer: $pubkeyHex", e)
+                    Log.e(TAG, "Invalid pubkey hex from signer", e)
                     return null
                 }
                 SignerLoginResult(npub = npub, pubkeyHex = pubkeyHex, signerPackage = pkg)
