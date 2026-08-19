@@ -97,7 +97,14 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             TopAppBar(
                 title = { Text("Baby Tracker") },
                 actions = {
-                    IconButton(onClick = { navController.navigate("settings") }) {
+                    IconButton(onClick = {
+                        navController.navigate("settings") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
                 },
@@ -125,6 +132,12 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
+                                    // When navigating TO the start destination itself,
+                                    // pop it inclusively so it's recreated fresh instead
+                                    // of launchSingleTop making the whole op a no-op.
+                                    if (screen.route == navController.graph.findStartDestination().route) {
+                                        inclusive = true
+                                    }
                                 }
                                 launchSingleTop = true
                                 restoreState = true
