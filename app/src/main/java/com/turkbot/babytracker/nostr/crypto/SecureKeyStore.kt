@@ -114,6 +114,34 @@ class SecureKeyStore(context: Context) {
         return raw.split("\n").filter { it.isNotBlank() }
     }
 
+    // ── Processed sync events ──────────────────────────
+
+    /**
+     * Track which kind-30078 event IDs we've already decrypted and merged.
+     * Without this, every app launch re-decrypts the same backup/partner-sync
+     * events on every relay — with Amber that means a permission prompt each
+     * time. Capped at the most recent 200 IDs to bound storage.
+     */
+    fun isEventProcessed(eventId: String): Boolean {
+        val raw = prefs.getString(KEY_PROCESSED_EVENTS, "") ?: ""
+        return raw.split(",").contains(eventId)
+    }
+
+    fun markEventProcessed(eventId: String) {
+        val raw = prefs.getString(KEY_PROCESSED_EVENTS, "") ?: ""
+        val ids = raw.split(",").filter { it.isNotBlank() }.toMutableList()
+        if (ids.contains(eventId)) return
+        ids.add(eventId)
+        // Keep only the most recent 200
+        val trimmed = if (ids.size > 200) ids.takeLast(200) else ids
+        prefs.edit().putString(KEY_PROCESSED_EVENTS, trimmed.joinToString(",")).apply()
+    }
+
+    /** Clear the processed-events cache (used after deleting relay data). */
+    fun clearProcessedEvents() {
+        prefs.edit().remove(KEY_PROCESSED_EVENTS).apply()
+    }
+
     // ── Partner sync ───────────────────────────────────
 
     /**
@@ -163,6 +191,7 @@ class SecureKeyStore(context: Context) {
         private const val KEY_MODE = "signer_mode"
         private const val KEY_SIGNER_PKG = "signer_package"
         private const val KEY_RELAYS = "relay_urls"
+        private const val KEY_PROCESSED_EVENTS = "processed_sync_events"
         private const val KEY_PARTNER_NPUB = "partner_npub"
         private const val KEY_PARTNER_NIP05 = "partner_nip05"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"

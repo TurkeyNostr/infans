@@ -15,6 +15,7 @@ package com.turkbot.babytracker.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.*
 import com.turkbot.babytracker.BabyTrackerApp
+import com.turkbot.babytracker.data.PdfExporter
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.nostr.NostrManager
@@ -389,6 +390,59 @@ class BabyViewModel(
 
     fun exportBackup() {
         viewModelScope.launch { nostr.exportBackup() }
+    }
+
+    /**
+     * Export all data to a PDF. Returns a content Uri for sharing, or null
+     * if there's no data to export.
+     */
+    suspend fun exportToPdf(context: android.content.Context): android.net.Uri? {
+        val exporter = PdfExporter(context, repo)
+        return exporter.export()
+    }
+
+    /** Delete all encrypted backup data from relays. */
+    suspend fun deleteRelayData(): Boolean {
+        return nostr.deleteRelayData()
+    }
+
+    /**
+     * Export all data to a JSON backup file. Returns a content Uri for sharing.
+     * This is a plain-text (unencrypted) backup for local safekeeping — it
+     * contains all tracking data but no private keys.
+     */
+    suspend fun exportToJson(context: android.content.Context): android.net.Uri? {
+        val payload = repo.collectAllData()
+        val jsonStr = kotlinx.serialization.json.Json.encodeToString(
+            com.turkbot.babytracker.data.repo.BackupPayload.serializer(),
+            payload
+        )
+        val exportsDir = java.io.File(context.filesDir, "exports").apply { mkdirs() }
+        val fileName = "infans-backup-${java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())}.json"
+        val outFile = java.io.File(exportsDir, fileName)
+        outFile.writeText(jsonStr)
+        return androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", outFile
+        )
+    }
+
+    /**
+     * Import data from a JSON backup file. Returns the number of items restored,
+     * or -1 on failure.
+     */
+    suspend fun importFromJson(uri: android.net.Uri): Int {
+        val jsonStr = app.contentResolver.openInputStream(uri)?.use { stream ->
+            stream.bufferedReader().use { it.readText() }
+        } ?: return -1
+
+        val payload = kotlinx.serialization.json.Json.decodeFromString(
+            com.turkbot.babytracker.data.repo.BackupPayload.serializer(),
+            jsonStr
+        )
+        nostr.restoreFromBackupPayload(payload)
+        return payload.children.size + payload.feedings.size + payload.sleeps.size +
+               payload.weights.size + payload.milestones.size + payload.diapers.size +
+               payload.pumpings.size + payload.healthRecords.size
     }
 }
 

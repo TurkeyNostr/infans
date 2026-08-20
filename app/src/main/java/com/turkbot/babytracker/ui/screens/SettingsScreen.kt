@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -689,6 +691,217 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         }
                     }
                 }
+            }
+        }
+
+        // ─── Backup & Restore ──────────────────────────────
+        item {
+            var pdfExporting by remember { mutableStateOf(false) }
+            var jsonExporting by remember { mutableStateOf(false) }
+            var jsonImporting by remember { mutableStateOf(false) }
+            var backupError by remember { mutableStateOf<String?>(null) }
+            var backupMessage by remember { mutableStateOf<String?>(null) }
+            val jsonFilePicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    jsonImporting = true
+                    backupError = null
+                    backupMessage = null
+                    scope.launch {
+                        try {
+                            val count = viewModel.importFromJson(uri)
+                            jsonImporting = false
+                            if (count >= 0) {
+                                backupMessage = "✓ Imported $count records"
+                            } else {
+                                backupError = "Import failed: could not read file"
+                            }
+                        } catch (e: Exception) {
+                            jsonImporting = false
+                            backupError = "Import failed: ${e.message}"
+                        }
+                    }
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Backup & Restore",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Export data for safekeeping or restore after relay failure or accidental deletion. PDF is for reading/printing. JSON backup can be re-imported to fully restore all data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // PDF export
+                    Button(
+                        onClick = {
+                            pdfExporting = true
+                            backupError = null
+                            backupMessage = null
+                            scope.launch {
+                                try {
+                                    val uri = viewModel.exportToPdf(context)
+                                    pdfExporting = false
+                                    if (uri != null) {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/pdf"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
+                                    } else {
+                                        backupError = "No data to export"
+                                    }
+                                } catch (e: Exception) {
+                                    pdfExporting = false
+                                    backupError = "PDF export failed: ${e.message}"
+                                }
+                            }
+                        },
+                        enabled = !pdfExporting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (pdfExporting) "Exporting…" else "Export to PDF")
+                    }
+                    // JSON backup export
+                    OutlinedButton(
+                        onClick = {
+                            jsonExporting = true
+                            backupError = null
+                            backupMessage = null
+                            scope.launch {
+                                try {
+                                    val uri = viewModel.exportToJson(context)
+                                    jsonExporting = false
+                                    if (uri != null) {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/json"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Save JSON Backup"))
+                                    } else {
+                                        backupError = "No data to export"
+                                    }
+                                } catch (e: Exception) {
+                                    jsonExporting = false
+                                    backupError = "JSON export failed: ${e.message}"
+                                }
+                            }
+                        },
+                        enabled = !jsonExporting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (jsonExporting) "Exporting…" else "Export JSON Backup")
+                    }
+                    // JSON restore
+                    OutlinedButton(
+                        onClick = {
+                            jsonFilePicker.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        },
+                        enabled = !jsonImporting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (jsonImporting) "Importing…" else "Restore from JSON")
+                    }
+                    backupMessage?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    backupError?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+
+        // ─── Delete Relay Data ──────────────────────────────
+        item {
+            var deleting by remember { mutableStateOf(false) }
+            var deleteResult by remember { mutableStateOf<String?>(null) }
+            var showDeleteConfirm by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Delete Relay Data",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "Removes all encrypted backups and partner-sync events from Nostr relays. Your local data is not affected. This signs two empty replacement events (one for self-backup, one for partner sync) that overwrite the old data on each relay.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        enabled = !deleting && relayConnected,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (deleting) "Deleting…" else "Delete from Relays")
+                    }
+                    deleteResult?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (it.startsWith("✓")) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            if (showDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirm = false },
+                    title = { Text("Delete Relay Data?") },
+                    text = { Text("This will publish empty replacement events to all connected relays, overwriting your encrypted backups. Your local data stays intact. This action cannot be undone.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteConfirm = false
+                                deleting = true
+                                deleteResult = null
+                                scope.launch {
+                                    val ok = viewModel.deleteRelayData()
+                                    deleting = false
+                                    deleteResult = if (ok) "✓ Relay data deleted"
+                                                   else "Failed to delete — check relay connection"
+                                }
+                            }
+                        ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                    }
+                )
             }
         }
 

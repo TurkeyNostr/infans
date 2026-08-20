@@ -37,6 +37,7 @@ class BabyRepository(context: Context) {
 
     // ── Children ──────────────────────────────────────
     fun children(): Flow<List<Child>> = childDao.getAll()
+    suspend fun childrenList(): List<Child> = childDao.getAll().first()
     suspend fun getChild(id: String): Child? = childDao.getById(id)
     suspend fun saveChild(child: Child) = childDao.insert(child)
     suspend fun deleteChild(child: Child) = childDao.delete(child)

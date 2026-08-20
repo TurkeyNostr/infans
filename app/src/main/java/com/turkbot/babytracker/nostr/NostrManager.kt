@@ -85,8 +85,8 @@ class NostrManager(context: Context) {
     private val _signer = MutableStateFlow<NostrSigner?>(null)
     val signer: StateFlow<NostrSigner?> = _signer
 
-    private val _relayConnected = MutableStateFlow(false)
-    val relayConnected: StateFlow<Boolean> = _relayConnected
+    /** Whether at least one relay is connected — backed by RelayPool's live flow. */
+    val relayConnected: StateFlow<Boolean> = relayPool.anyConnected
 
     /** Current user's own NIP-05, fetched from kind 0 metadata after login. */
     private val _myNip05 = MutableStateFlow<String?>(null)
@@ -394,14 +394,14 @@ class NostrManager(context: Context) {
         // Subscribe to our own encrypted backups (kind 30078 authored by us).
         // We don't filter by #d tag because some relays don't support combining
         // authors + tag filters. We filter by d-tag client-side instead.
-        val backupFilter = """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":50}"""
+        val backupFilter = """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":10}"""
         relayPool.subscribe(SUB_BACKUP, backupFilter)
 
         // Subscribe to partner sync events (kind 30078 where #p = our pubkey).
         // We don't filter by #d tag here because many relays don't support querying
         // by multiple different tag types simultaneously. Instead we fetch all
         // kind 30078 events that p-tag us and filter by d-tag client-side.
-        val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":50}"""
+        val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
 
         // Also subscribe to ALL kind 30078 events authored by our partner, in case
@@ -410,7 +410,7 @@ class NostrManager(context: Context) {
         if (partnerNpubVal != null) {
             val partnerHex = npubToHex(partnerNpubVal)
             if (partnerHex != null) {
-                val partnerAuthorFilter = """{"kinds":[30078],"authors":["$partnerHex"],"limit":50}"""
+                val partnerAuthorFilter = """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
                 relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
             }
         }
@@ -588,7 +588,14 @@ class NostrManager(context: Context) {
             Log.d(TAG, "Kind 30078 from us but d-tag is '$dTag' (not self-backup) — ignoring")
             return
         }
+        // Skip events we've already decrypted — every relay returns the same
+        // event, and re-decrypting triggers a fresh Amber prompt each time.
+        if (keyStore.isEventProcessed(event.id)) {
+            Log.d(TAG, "Backup event ${event.id.take(12)}… already processed — skipping decrypt")
+            return
+        }
         val payload = backupService.decryptBackup(event.content, signer) ?: return
+        keyStore.markEventProcessed(event.id)
         restoreFromPayload(payload)
         Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
     }
@@ -606,6 +613,13 @@ class NostrManager(context: Context) {
         val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
         if (dTag != BackupService.PARTNER_SYNC_D_TAG) {
             Log.d(TAG, "Kind 30078 p-tagged us but d-tag is '$dTag' (not partner sync) — ignoring")
+            return
+        }
+
+        // Skip events we've already decrypted — each relay returns the same
+        // event, and re-decrypting triggers a fresh Amber prompt each time.
+        if (keyStore.isEventProcessed(event.id)) {
+            Log.d(TAG, "Partner sync event ${event.id.take(12)}… already processed — skipping decrypt")
             return
         }
 
@@ -631,6 +645,7 @@ class NostrManager(context: Context) {
         }
 
         val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
+        keyStore.markEventProcessed(event.id)
         restoreFromPayload(payload)
         Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
     }
@@ -647,6 +662,14 @@ class NostrManager(context: Context) {
         payload.diapers.forEach { repo.saveDiaper(it) }
         payload.pumpings.forEach { repo.savePumping(it) }
         payload.healthRecords.forEach { repo.saveHealthRecord(it) }
+    }
+
+    /**
+     * Restore data from a [BackupPayload] (e.g. from a local JSON backup file).
+     * Public entry point for the "import from file" feature.
+     */
+    suspend fun restoreFromBackupPayload(payload: BackupPayload) {
+        restoreFromPayload(payload)
     }
 
     /**
@@ -667,6 +690,75 @@ class NostrManager(context: Context) {
             }
         }
         return selfOk
+    }
+
+    /**
+     * Delete all data stored on relays. Kind 30078 is replaceable (addressed
+     * by pubkey + d-tag), so publishing an empty replacement with the same
+     * d-tag overwrites the old event. Relays drop the old content.
+     *
+     * Deletes both:
+     *   - Self-backup (d-tag "baby-tracker-backup", authored by us)
+     *   - Partner sync (d-tag "baby-tracker-sync", authored by us)
+     *
+     * Returns true if both deletions were published (relays accepted them).
+     */
+    suspend fun deleteRelayData(): Boolean {
+        val signer = _signer.value ?: return false
+
+        var ok = true
+
+        // Delete self-backup: publish empty replacement with same d-tag
+        try {
+            val selfDelete = NostrEvent.createSigned(
+                kind = BackupService.BACKUP_KIND,
+                content = "",
+                signer = signer,
+                tags = listOf(
+                    listOf("d", BackupService.BACKUP_D_TAG),
+                    listOf("client", "Infans", "1.0.0"),
+                    listOf("deleted", "true")
+                )
+            )
+            relayPool.publish(selfDelete.toJsonObject())
+            Log.d(TAG, "Deleted self-backup on relays")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete self-backup", e)
+            ok = false
+        }
+
+        // Delete partner sync: publish empty replacement with same d-tag
+        try {
+            val partnerTags = mutableListOf(
+                listOf("d", BackupService.PARTNER_SYNC_D_TAG),
+                listOf("client", "Infans", "1.0.0"),
+                listOf("deleted", "true")
+            )
+            // Keep the p-tag so relays that indexed by #p can still see it's gone
+            _partnerNpub.value?.let { npub ->
+                npubToHex(npub)?.let { hex ->
+                    partnerTags.add(listOf("p", hex))
+                }
+            }
+
+            val partnerDelete = NostrEvent.createSigned(
+                kind = BackupService.BACKUP_KIND,
+                content = "",
+                signer = signer,
+                tags = partnerTags
+            )
+            relayPool.publish(partnerDelete.toJsonObject())
+            Log.d(TAG, "Deleted partner sync on relays")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete partner sync", e)
+            ok = false
+        }
+
+        // Clear the processed-events cache so we don't skip future events
+        // that reuse the same d-tag address
+        keyStore.clearProcessedEvents()
+
+        return ok
     }
 
     /**

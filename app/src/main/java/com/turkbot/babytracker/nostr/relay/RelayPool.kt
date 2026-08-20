@@ -15,7 +15,9 @@ package com.turkbot.babytracker.nostr.relay
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 
@@ -47,6 +49,15 @@ class RelayPool(
 
     val currentRelays: List<String> get() = relayUrls
 
+    /** Backing flow for overall connection status. */
+    private val _anyConnected = MutableStateFlow(false)
+    val anyConnected: StateFlow<Boolean> = _anyConnected
+
+    /** Recompute whether at least one relay is connected. Called after connect/reconfigure. */
+    private fun refreshConnected() {
+        _anyConnected.value = connections.any { it.state.value == RelayState.CONNECTED }
+    }
+
     fun connect() {
         connections.forEach { it.connect() }
         collectJob?.cancel()
@@ -56,6 +67,13 @@ class RelayPool(
                     for (wrapper in conn.events) {
                         _events.emit(wrapper)
                     }
+                }
+            }
+            // Poll connection states and update the anyConnected flow
+            launch {
+                while (isActive) {
+                    refreshConnected()
+                    delay(2000)
                 }
             }
         }
