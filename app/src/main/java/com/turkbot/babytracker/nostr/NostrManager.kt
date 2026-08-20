@@ -737,10 +737,10 @@ class NostrManager(context: Context) {
             }
 
             // unwrapGiftWrap does 2 sequential Amber nip44_decrypt calls.
-            // Serialize with exports/sends so prompts don't interleave.
-            val unwrapped = amberMutex.withLock {
-                messaging.unwrapGiftWrap(event, signer, expectedPartnerHex)
-            } ?: return
+            // AmberBridge already serializes all Amber calls via its own mutex,
+            // so we do NOT hold amberMutex here — otherwise incoming decrypts
+            // block user-initiated sends/exports behind a queue of Amber prompts.
+            val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
 
             if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
                 Log.w(TAG, "DM from non-partner pubkey — ignoring")
@@ -795,11 +795,10 @@ class NostrManager(context: Context) {
             return
         }
         try {
-            // decryptBackup does an Amber nip44_decrypt — serialize with
-            // exports/sends so prompts don't interleave.
-            val payload = amberMutex.withLock {
-                backupService.decryptBackup(event.content, signer)
-            } ?: return
+            // decryptBackup does an Amber nip44_decrypt. AmberBridge already
+            // serializes all Amber calls via its own mutex, so we do NOT hold
+            // amberMutex here — incoming decrypts must not block sends/exports.
+            val payload = backupService.decryptBackup(event.content, signer) ?: return
             keyStore.saveLastBackupTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
@@ -867,11 +866,11 @@ class NostrManager(context: Context) {
                 return
             }
 
-            // decryptPartnerBackup does an Amber nip44_decrypt — serialize
-            // with exports/sends so prompts don't interleave.
-            val payload = amberMutex.withLock {
-                backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex)
-            } ?: return
+            // decryptPartnerBackup does an Amber nip44_decrypt. AmberBridge
+            // already serializes all Amber calls via its own mutex, so we do
+            // NOT hold amberMutex here — incoming decrypts must not block
+            // user-initiated sends/exports.
+            val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
             keyStore.saveLastPartnerSyncTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
@@ -1024,6 +1023,7 @@ class NostrManager(context: Context) {
      */
     suspend fun sendMessage(text: String, recipientNpub: String): Boolean {
         val signer = _signer.value ?: return false
+        Dbg.info(Cat.DM, "Send button pressed — sending message")
 
         // Enforce partner-only messaging
         val configuredPartner = _partnerNpub.value
