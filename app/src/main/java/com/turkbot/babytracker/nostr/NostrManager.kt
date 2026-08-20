@@ -147,17 +147,20 @@ class NostrManager(context: Context) {
      *  triggering multiple Amber prompts when 3 relays each return it. */
     private val inflightEvents = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
-    /** Serializes backup exports — prevents concurrent exportBackup() calls
-     *  (data-entry + manual button) from interleaving Amber prompts, which
-     *  produces a 4th encrypt where a sign_event should be and silently
-     *  drops the partner-sync event. */
-    private val backupMutex = Mutex()
+    /** Serializes ALL Amber signer operations (encrypt, sign, decrypt) to
+     *  prevent prompt interleaving between exports, DM sends, and incoming
+     *  event handlers. Without this, a relay echoing back our just-published
+     *  backup triggers a decrypt prompt mid-export — the user approves the
+     *  wrong operation and the partner-sync event is silently lost. */
+    private val amberMutex = Mutex()
 
-    /** Serializes DM sending — prevents sendDirectMessage() from interleaving
-     *  Amber prompts with a concurrent exportBackup(). Both use the same signer,
-     *  so without serialization the encrypt/sign sequence for one can preempt
-     *  the other (same class of bug as the backup interleaving). */
-    private val messagingMutex = Mutex()
+    /** Wall-clock seconds of our most recent self-backup publish. Used to
+     *  skip the relay's echo of our own just-published event — decrypting
+     *  it wastes an Amber prompt and risks interleaving with the partner-
+     *  sync export that follows. Zero on a fresh install (cross-device
+     *  restore processes all events). */
+    @Volatile
+    private var lastSelfExportTime: Long = 0L
 
     companion object {
         private const val TAG = "NostrManager"
@@ -414,14 +417,31 @@ class NostrManager(context: Context) {
                     when (wrapper.event.kind) {
                         GiftWrapMessaging.KIND_GIFT_WRAP -> {
                             if (wrapper.subscriptionId == SUB_DMS) {
-                                handleIncomingDM(wrapper.event, signer)
+                                // Launch in a separate coroutine so the event
+                                // collector isn't blocked while waiting for
+                                // amberMutex — other events keep flowing.
+                                scope.launch { handleIncomingDM(wrapper.event, signer) }
                             }
                         }
                         BackupService.BACKUP_KIND -> {
                             when (wrapper.subscriptionId) {
-                                SUB_BACKUP -> handleBackupEvent(wrapper.event, signer)
+                                SUB_BACKUP -> {
+                                    // Skip the relay's echo of our own just-
+                                    // published self-backup — decrypting it
+                                    // wastes an Amber prompt and interleaves
+                                    // with the partner-sync export that
+                                    // follows in the same exportBackup() call.
+                                    if (wrapper.event.pubkey == myPubkeyHex &&
+                                        wrapper.event.createdAt >= lastSelfExportTime) {
+                                        Dbg.info(Cat.SYNC, "Skipping self-backup echo from relay (just published)")
+                                    } else {
+                                        scope.launch { handleBackupEvent(wrapper.event, signer) }
+                                    }
+                                }
                                 SUB_PARTNER_SYNC,
-                                SUB_PARTNER_SYNC + "_author" -> handlePartnerSyncEvent(wrapper.event, signer)
+                                SUB_PARTNER_SYNC + "_author" -> {
+                                    scope.launch { handlePartnerSyncEvent(wrapper.event, signer) }
+                                }
                             }
                         }
                     }
@@ -692,6 +712,14 @@ class NostrManager(context: Context) {
             Dbg.info(Cat.DM, "DM already stored — skipping decrypt")
             return
         }
+        // Skip events we already attempted — failed decrypts must NOT retry,
+        // otherwise a rejected Amber prompt or non-partner gift wrap loops
+        // forever as each of 3 relays re-delivers the same event.
+        if (keyStore.isEventProcessed(event.id)) {
+            Log.d(TAG, "DM ${event.id.take(12)} already processed — skipping")
+            Dbg.info(Cat.DM, "DM already processed — skipping")
+            return
+        }
         // Prevent duplicate decrypts when 3 relays return the same event
         if (!inflightEvents.add(event.id)) {
             Log.d(TAG, "DM ${event.id.take(12)} already being decrypted — skipping")
@@ -708,7 +736,11 @@ class NostrManager(context: Context) {
                 return
             }
 
-            val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
+            // unwrapGiftWrap does 2 sequential Amber nip44_decrypt calls.
+            // Serialize with exports/sends so prompts don't interleave.
+            val unwrapped = amberMutex.withLock {
+                messaging.unwrapGiftWrap(event, signer, expectedPartnerHex)
+            } ?: return
 
             if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
                 Log.w(TAG, "DM from non-partner pubkey — ignoring")
@@ -729,6 +761,9 @@ class NostrManager(context: Context) {
 
             keyStore.saveLastDmTime(System.currentTimeMillis() / 1000)
         } finally {
+            // Mark as processed regardless of outcome — failed decrypts must
+            // not retry on the next relay delivery, or we get a prompt storm.
+            keyStore.markEventProcessed(event.id)
             inflightEvents.remove(event.id)
         }
     }
@@ -760,13 +795,19 @@ class NostrManager(context: Context) {
             return
         }
         try {
-            val payload = backupService.decryptBackup(event.content, signer) ?: return
-            keyStore.markEventProcessed(event.id)
+            // decryptBackup does an Amber nip44_decrypt — serialize with
+            // exports/sends so prompts don't interleave.
+            val payload = amberMutex.withLock {
+                backupService.decryptBackup(event.content, signer)
+            } ?: return
             keyStore.saveLastBackupTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
             Dbg.info(Cat.SYNC, "Backup restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
         } finally {
+            // Mark as processed regardless of outcome — failed decrypts must
+            // not retry on the next relay delivery, or we get a prompt storm.
+            keyStore.markEventProcessed(event.id)
             inflightEvents.remove(event.id)
         }
     }
@@ -826,13 +867,19 @@ class NostrManager(context: Context) {
                 return
             }
 
-            val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
-            keyStore.markEventProcessed(event.id)
+            // decryptPartnerBackup does an Amber nip44_decrypt — serialize
+            // with exports/sends so prompts don't interleave.
+            val payload = amberMutex.withLock {
+                backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex)
+            } ?: return
             keyStore.saveLastPartnerSyncTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
             Dbg.info(Cat.SYNC, "Partner sync restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
         } finally {
+            // Mark as processed regardless of outcome — failed decrypts must
+            // not retry on the next relay delivery, or we get a prompt storm.
+            keyStore.markEventProcessed(event.id)
             inflightEvents.remove(event.id)
         }
     }
@@ -866,9 +913,12 @@ class NostrManager(context: Context) {
      */
     suspend fun exportBackup(): Boolean {
         val signer = _signer.value ?: return false
-        // Serialize all backup exports — prevents concurrent calls from
-        // interleaving Amber encrypt/sign prompts and losing events.
-        return backupMutex.withLock {
+        // Serialize all Amber operations — exports, DM sends, and incoming
+        // event handlers all go through this mutex so their encrypt/sign/decrypt
+        // prompts can't interleave.
+        return amberMutex.withLock {
+            // Record publish time so the event collector can skip the relay echo
+            lastSelfExportTime = System.currentTimeMillis() / 1000
             _exportBackupLocked(signer)
         }
     }
@@ -907,61 +957,64 @@ class NostrManager(context: Context) {
     suspend fun deleteRelayData(): Boolean {
         val signer = _signer.value ?: return false
 
-        var ok = true
+        // Serialize Amber signing with all other operations
+        return amberMutex.withLock {
+            var ok = true
 
-        // Delete self-backup: publish empty replacement with same d-tag
-        try {
-            val selfDelete = NostrEvent.createSigned(
-                kind = BackupService.BACKUP_KIND,
-                content = "",
-                signer = signer,
-                tags = listOf(
-                    listOf("d", BackupService.BACKUP_D_TAG),
+            // Delete self-backup: publish empty replacement with same d-tag
+            try {
+                val selfDelete = NostrEvent.createSigned(
+                    kind = BackupService.BACKUP_KIND,
+                    content = "",
+                    signer = signer,
+                    tags = listOf(
+                        listOf("d", BackupService.BACKUP_D_TAG),
+                        listOf("client", "Infans", "1.0.0"),
+                        listOf("deleted", "true")
+                    )
+                )
+                relayPool.publish(selfDelete.toJsonObject())
+                Log.d(TAG, "Deleted self-backup on relays")
+                Dbg.info(Cat.SYNC, "Deleted self-backup on relays")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete self-backup", e)
+                ok = false
+            }
+
+            // Delete partner sync: publish empty replacement with same d-tag
+            try {
+                val partnerTags = mutableListOf(
+                    listOf("d", BackupService.PARTNER_SYNC_D_TAG),
                     listOf("client", "Infans", "1.0.0"),
                     listOf("deleted", "true")
                 )
-            )
-            relayPool.publish(selfDelete.toJsonObject())
-            Log.d(TAG, "Deleted self-backup on relays")
-            Dbg.info(Cat.SYNC, "Deleted self-backup on relays")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete self-backup", e)
-            ok = false
-        }
-
-        // Delete partner sync: publish empty replacement with same d-tag
-        try {
-            val partnerTags = mutableListOf(
-                listOf("d", BackupService.PARTNER_SYNC_D_TAG),
-                listOf("client", "Infans", "1.0.0"),
-                listOf("deleted", "true")
-            )
-            // Keep the p-tag so relays that indexed by #p can still see it's gone
-            _partnerNpub.value?.let { npub ->
-                npubToHex(npub)?.let { hex ->
-                    partnerTags.add(listOf("p", hex))
+                // Keep the p-tag so relays that indexed by #p can still see it's gone
+                _partnerNpub.value?.let { npub ->
+                    npubToHex(npub)?.let { hex ->
+                        partnerTags.add(listOf("p", hex))
+                    }
                 }
+
+                val partnerDelete = NostrEvent.createSigned(
+                    kind = BackupService.BACKUP_KIND,
+                    content = "",
+                    signer = signer,
+                    tags = partnerTags
+                )
+                relayPool.publish(partnerDelete.toJsonObject())
+                Log.d(TAG, "Deleted partner sync on relays")
+                Dbg.info(Cat.SYNC, "Deleted partner sync on relays")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to delete partner sync", e)
+                ok = false
             }
 
-            val partnerDelete = NostrEvent.createSigned(
-                kind = BackupService.BACKUP_KIND,
-                content = "",
-                signer = signer,
-                tags = partnerTags
-            )
-            relayPool.publish(partnerDelete.toJsonObject())
-            Log.d(TAG, "Deleted partner sync on relays")
-            Dbg.info(Cat.SYNC, "Deleted partner sync on relays")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete partner sync", e)
-            ok = false
+            // Clear the processed-events cache so we don't skip future events
+            // that reuse the same d-tag address
+            keyStore.clearProcessedEvents()
+
+            ok
         }
-
-        // Clear the processed-events cache so we don't skip future events
-        // that reuse the same d-tag address
-        keyStore.clearProcessedEvents()
-
-        return ok
     }
 
     /**
@@ -980,9 +1033,8 @@ class NostrManager(context: Context) {
             return false
         }
 
-        // Serialize with backups — both use the same Amber signer and their
-        // encrypt/sign prompts must not interleave.
-        return messagingMutex.withLock {
+        // Serialize with all other Amber operations (exports, incoming handlers)
+        return amberMutex.withLock {
             messaging.sendDirectMessage(text, signer, recipientNpub)
         }
     }

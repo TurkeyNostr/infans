@@ -69,8 +69,19 @@ object DebugLogger {
         val dir = File(context.filesDir, "exports")
         if (!dir.exists()) dir.mkdirs()
         val file = File(dir, "infans_debug_log_${System.currentTimeMillis()}.txt")
+        // Include the app version in the export header so pasted logs
+        // always identify which build produced them.
+        val versionHeader = try {
+            val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val vName = pkgInfo.versionName ?: "?"
+            val vCode = pkgInfo.longVersionCode
+            "Infans v$vName ($vCode)"
+        } catch (e: Exception) {
+            "Infans (version unavailable)"
+        }
         file.printWriter().use { writer ->
             writer.println("Infans Debug Log — exported ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+            writer.println(versionHeader)
             writer.println("Total entries: ${_entries.value.size}")
             writer.println("PII-free by construction: no npubs, pubkeys, NIP-05s, child names, or decrypted data")
             writer.println()

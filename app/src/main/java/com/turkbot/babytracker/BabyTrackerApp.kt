@@ -13,6 +13,8 @@
 package com.turkbot.babytracker
 
 import android.app.Application
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.nostr.NostrManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,13 @@ class BabyTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Log the app version as the first entry so debug logs always
+        // show which build the user is running.
+        val pkgInfo = packageManager.getPackageInfo(packageName, 0)
+        val versionName = pkgInfo.versionName ?: "?"
+        val versionCode = pkgInfo.longVersionCode
+        Dbg.info(Cat.GENERAL, "Infans v$versionName ($versionCode) started")
+
         nostrManager = NostrManager(this)
         // Load stored identity (local key or Amber npub) and connect to relays
         appScope.launch { nostrManager.initialize() }
