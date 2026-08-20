@@ -72,10 +72,9 @@ class NostrManager(context: Context) {
         "wss://relay.primal.net"
     )
 
-    // Effective relays — always use defaults to ensure both parents are on the
-    // same relay set. Previously we saved NIP-65 relays per-user, which caused
-    // the two phones to end up on different relays — partner sync and DMs never
-    // crossed. Stored relay preferences are now ignored.
+    // Effective relays — start with defaults. After login, NIP-65 relays
+    // (kind 10002) are fetched and applied if the user has any set.
+    // Defaults (damus, nos.lol, primal) are used when no NIP-65 list exists.
     private val effectiveRelays: List<String> = defaultRelays
 
     val relayPool = RelayPool(effectiveRelays, httpClient)
@@ -147,7 +146,6 @@ class NostrManager(context: Context) {
         const val SUB_NIP65 = "nip65_relay_sub"
         const val SUB_PARTNER_SYNC = "partner_sync_sub"
     }
-
     /**
      * Initialize: load stored signer (local or amber), connect to relays, subscribe.
      * If saved relay preferences exist, they are used; otherwise defaults.
@@ -424,18 +422,16 @@ class NostrManager(context: Context) {
     }
 
     /**
-     * Fetch the user's NIP-65 relay list (kind 10002).
-     * We do NOT auto-reconfigure to NIP-65 relays anymore — that caused the two
-     * phones to end up on different relay sets, so partner sync events and DMs
-     * never crossed. Instead, NIP-65 is informational only; the default relays
-     * (damus, nos.lol, primal) are used for all communication.
+     * Fetch the user's NIP-65 relay list (kind 10002) and reconfigure the pool.
+     * Uses NIP-65 relays if found; falls back to defaults if not.
      */
     private suspend fun fetchAndApplyNip65Relays(pubkeyHex: String) {
         val relays = fetchNip65Relays(pubkeyHex)
         if (relays.isNotEmpty()) {
-            Log.d(TAG, "NIP-65: found ${relays.size} relays for user (not auto-applying — using defaults for partner sync)")
+            Log.d(TAG, "NIP-65: found ${relays.size} relays for user, applying")
+            applyRelays(relays)
         } else {
-            Log.d(TAG, "NIP-65: no relay list found, keeping current relays")
+            Log.d(TAG, "NIP-65: no relay list found, keeping default relays")
         }
     }
 
@@ -487,6 +483,54 @@ class NostrManager(context: Context) {
         relayPool.reconfigure(sanitized)
         (currentRelays as MutableStateFlow).value = sanitized
         Log.d(TAG, "Relays updated to: $sanitized")
+    }
+
+    /**
+     * Fetch a pubkey's NIP-65 relay list using a dedicated subscription ID.
+     * Used for checking the partner's relays.
+     */
+    private suspend fun fetchNip65ForPubkey(pubkeyHex: String, subId: String): List<String> {
+        return withTimeoutOrNull(10_000) {
+            val filter = """{"kinds":[10002],"authors":["$pubkeyHex"],"limit":1}"""
+            val deferred = CompletableDeferred<List<String>>()
+
+            val job = scope.launch {
+                relayPool.events.collect { wrapper ->
+                    if (wrapper.subscriptionId == subId && wrapper.event.kind == 10002) {
+                        val urls = wrapper.event.tags
+                            .filter { it.isNotEmpty() && it[0] == "r" }
+                            .mapNotNull { it.getOrNull(1)?.takeIf { url -> url.startsWith("ws") } }
+                        deferred.complete(urls)
+                    }
+                }
+            }
+            relayPool.subscribe(subId, filter)
+
+            try {
+                deferred.await()
+            } finally {
+                relayPool.unsubscribe(subId)
+                job.cancel()
+            }
+        } ?: emptyList()
+    }
+
+    /**
+     * Compare our relay list against the partner's NIP-65 relay list.
+     * Returns our relays, the partner's relays, and the overlap.
+     */
+    suspend fun checkPartnerRelayMatch(): RelayMatchResult {
+        val partnerNpubVal = _partnerNpub.value ?: return RelayMatchResult(emptyList(), emptyList(), emptyList())
+        val partnerHex = npubToHex(partnerNpubVal) ?: return RelayMatchResult(emptyList(), emptyList(), emptyList())
+
+        val myRelays = currentRelays.value
+        val partnerRelays = fetchNip65ForPubkey(partnerHex, "partner_nip65_check")
+
+        val mySet = myRelays.map { it.removeSuffix("/") }.toSet()
+        val partnerSet = partnerRelays.map { it.removeSuffix("/") }.toSet()
+        val overlap = mySet.intersect(partnerSet).toList()
+
+        return RelayMatchResult(myRelays, partnerRelays, overlap)
     }
 
     /**
@@ -651,3 +695,9 @@ class NostrManager(context: Context) {
         scope.cancel()
     }
 }
+
+data class RelayMatchResult(
+    val myRelays: List<String>,
+    val partnerRelays: List<String>,
+    val overlap: List<String>
+)

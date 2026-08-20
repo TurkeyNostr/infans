@@ -132,10 +132,13 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
-                                    // When navigating TO the start destination itself,
-                                    // pop it inclusively so it's recreated fresh instead
-                                    // of launchSingleTop making the whole op a no-op.
-                                    if (screen.route == navController.graph.findStartDestination().route) {
+                                    // Only pop the start destination inclusively when we're
+                                    // already on it — that recreates it fresh. When coming from
+                                    // a non-tab screen like Settings, keep it on the stack so
+                                    // we land on Home, not a restored wrong tab.
+                                    val startRoute = navController.graph.findStartDestination().route
+                                    if (screen.route == startRoute &&
+                                        currentDestination?.route == startRoute) {
                                         inclusive = true
                                     }
                                 }

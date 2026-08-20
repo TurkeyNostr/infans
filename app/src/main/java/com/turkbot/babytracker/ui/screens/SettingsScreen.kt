@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.nostr.NostrManager
+import com.turkbot.babytracker.nostr.RelayMatchResult
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.relay.RelayState
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -495,17 +496,100 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                     // Partner reachability check
                     if (partnerNpubState != null) {
                         HorizontalDivider()
+                        var relayMatch by remember { mutableStateOf<RelayMatchResult?>(null) }
+                        var matchChecking by remember { mutableStateOf(false) }
+
                         Text(
                             "Partner Reachability",
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        Text(
-                            "Checks if your partner has published data to these same relays.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+
+                        if (relayMatch != null) {
+                            // Show relay overlap status
+                            if (relayMatch!!.overlap.isEmpty()) {
+                                Text(
+                                    "⚠ No shared relays! You and your partner are on different relays.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                                Text(
+                                    "Your relays:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                relayMatch!!.myRelays.forEach { url ->
+                                    Text(
+                                        "  $url",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    "Partner's relays:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (relayMatch!!.partnerRelays.isEmpty()) {
+                                    Text(
+                                        "  No NIP-65 relay list found",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    relayMatch!!.partnerRelays.forEach { url ->
+                                        Text(
+                                            "  $url",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Text(
+                                    "Ask your partner to add at least one of your relays to their NIP-65 list, or both use the default relays.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    "✓ ${relayMatch!!.overlap.size} shared relay(s): sync and messaging should work.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                                relayMatch!!.overlap.forEach { url ->
+                                    Text(
+                                        "  ✓ $url",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                matchChecking = true
+                                relayMatch = null
+                                scope.launch {
+                                    relayMatch = nostrManager.checkPartnerRelayMatch()
+                                    matchChecking = false
+                                }
+                            },
+                            enabled = !matchChecking && relayConnected,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (matchChecking) "Checking…" else "Check Relay Match")
+                        }
 
                         if (relayCheckResult != null) {
+                            HorizontalDivider()
+                            Text(
+                                "Data on shared relays:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             relayCheckResult!!.forEach { (url, reachable) ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -534,21 +618,6 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                     )
                                 }
                             }
-                            if (relayCheckResult!!.values.all { !it }) {
-                                Text(
-                                    "Your partner hasn't published to any of these relays. Make sure they're on the same version and have added data.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            } else {
-                                Text(
-                                    "✓ Partner data found on shared relays — sync should work.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            }
                         }
 
                         Button(
@@ -563,7 +632,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                             enabled = !checking && relayConnected,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(if (checking) "Checking…" else "Check Partner Connection")
+                            Text(if (checking) "Checking…" else "Check Partner Data")
                         }
                     } else {
                         Text(
