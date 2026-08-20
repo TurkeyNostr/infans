@@ -18,11 +18,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.ChatMessage
@@ -38,6 +40,7 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     val messages by viewModel.messages.collectAsState()
     val signer by nostrManager.signer.collectAsState()
     val partnerState by nostrManager.partnerNpub.collectAsState()
+    val partnerNip05 by nostrManager.partnerNip05.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -74,6 +77,31 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Partner header
+        if (partnerState != null) {
+            Surface(
+                tonalElevation = 2.dp,
+                color = MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        partnerNip05 ?: (partnerState!!.take(24) + "..."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
         // Messages list
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
@@ -98,12 +126,13 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             }
         }
 
-        // Partner npub input (shown if not set)
+        // Partner input (shown if not set)
         if (partnerState == null) {
             OutlinedTextField(
                 value = partnerNpub,
                 onValueChange = { partnerNpub = it },
-                label = { Text("Partner's npub") },
+                label = { Text("Partner's npub or NIP-05") },
+                placeholder = { Text("npub1... or name@domain.com") },
                 supportingText = { Text("Messaging is limited to your partner only") },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 singleLine = true
@@ -156,20 +185,26 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                 }
                             }
                         } else {
-                            // First-time setup: set partner npub then send
-                            val trimmedNpub = partnerNpub.trim()
-                            if (trimmedNpub.isEmpty() || inputText.isBlank()) {
-                                error = "Enter partner's npub and a message"
+                            // First-time setup: resolve input (npub or NIP-05) then send
+                            val trimmedInput = partnerNpub.trim()
+                            if (trimmedInput.isEmpty() || inputText.isBlank()) {
+                                error = "Enter partner's npub or NIP-05 and a message"
                                 return@FilledIconButton
                             }
                             error = null
-                            nostrManager.setPartnerNpub(trimmedNpub)
                             scope.launch {
-                                val success = nostrManager.sendMessage(inputText, trimmedNpub)
-                                if (success) {
-                                    inputText = ""
+                                val success = viewModel.setPartnerIdentifier(trimmedInput)
+                                if (success && nostrManager.partnerNpub.value != null) {
+                                    val sendOk = nostrManager.sendMessage(
+                                        inputText, nostrManager.partnerNpub.value!!
+                                    )
+                                    if (sendOk) {
+                                        inputText = ""
+                                    } else {
+                                        error = "Failed to send — check relay connection"
+                                    }
                                 } else {
-                                    error = "Failed to send — check relay connection"
+                                    error = "Could not resolve partner identifier"
                                 }
                             }
                         }

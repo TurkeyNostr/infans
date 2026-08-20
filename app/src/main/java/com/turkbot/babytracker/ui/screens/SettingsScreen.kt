@@ -319,6 +319,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         Spacer(Modifier.height(12.dp))
 
                         val currentPartner by viewModel.partnerNpub.collectAsState()
+                        val partnerNip05 by viewModel.partnerNip05.collectAsState()
                         if (currentPartner != null) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -329,11 +330,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    currentPartner!!.take(24) + "...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Column {
+                                    Text(
+                                        partnerNip05 ?: (currentPartner!!.take(24) + "..."),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (partnerNip05 != null) {
+                                        Text(
+                                            currentPartner!!.take(24) + "...",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(12.dp))
                             OutlinedButton(
@@ -355,8 +365,8 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                     partnerNpubInput = it
                                     partnerError = null
                                 },
-                                label = { Text("Partner's npub") },
-                                placeholder = { Text("npub1...") },
+                                label = { Text("Partner's npub or NIP-05") },
+                                placeholder = { Text("npub1... or name@domain.com") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -372,13 +382,19 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                             Button(
                                 onClick = {
                                     val input = partnerNpubInput.trim()
-                                    if (!input.startsWith("npub1")) {
-                                        partnerError = "Enter a valid npub (starts with npub1...)"
+                                    if (input.isEmpty()) {
+                                        partnerError = "Enter an npub or NIP-05 identifier"
                                     } else {
-                                        viewModel.setPartnerNpub(input)
-                                        partnerNpubInput = ""
-                                        // Trigger a backup so the partner gets our data immediately
-                                        viewModel.exportBackup()
+                                        scope.launch {
+                                            val success = viewModel.setPartnerIdentifier(input)
+                                            if (success) {
+                                                partnerNpubInput = ""
+                                                // Trigger a backup so the partner gets our data immediately
+                                                viewModel.exportBackup()
+                                            } else {
+                                                partnerError = "Could not resolve — check the identifier"
+                                            }
+                                        }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()

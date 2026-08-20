@@ -81,6 +81,7 @@ class BabyViewModel(
     val signer = nostr.signer
     val relayConnected = nostr.relayConnected
     val partnerNpub = nostr.partnerNpub
+    val partnerNip05 = nostr.partnerNip05
 
     // ── Child management ──────────────────────────────
     fun selectChild(id: String) { _activeChildId.value = id }
@@ -293,6 +294,10 @@ class BabyViewModel(
 
     fun setPartnerNpub(npub: String?) {
         nostr.setPartnerNpub(npub)
+    }
+
+    suspend fun setPartnerIdentifier(input: String): Boolean {
+        return nostr.setPartnerIdentifier(input)
     }
 
     // ── Reminders ──────────────────────────────────────

@@ -124,6 +124,7 @@ class SecureKeyStore(context: Context) {
         val edit = prefs.edit()
         if (npub.isNullOrBlank()) {
             edit.remove(KEY_PARTNER_NPUB)
+            edit.remove(KEY_PARTNER_NIP05) // clear cached nip05 too
         } else {
             edit.putString(KEY_PARTNER_NPUB, npub)
         }
@@ -131,6 +132,22 @@ class SecureKeyStore(context: Context) {
     }
 
     fun getPartnerNpub(): String? = prefs.getString(KEY_PARTNER_NPUB, null)
+
+    /**
+     * Cache the partner's NIP-05 identifier (resolved from their kind 0 metadata).
+     * Null clears it. Cleared automatically when partner npub is cleared.
+     */
+    fun savePartnerNip05(nip05: String?) {
+        val edit = prefs.edit()
+        if (nip05.isNullOrBlank()) {
+            edit.remove(KEY_PARTNER_NIP05)
+        } else {
+            edit.putString(KEY_PARTNER_NIP05, nip05)
+        }
+        edit.apply()
+    }
+
+    fun getPartnerNip05(): String? = prefs.getString(KEY_PARTNER_NIP05, null)
 
     // ── Reminder interval ──────────────────────────────
 
@@ -147,6 +164,7 @@ class SecureKeyStore(context: Context) {
         private const val KEY_SIGNER_PKG = "signer_package"
         private const val KEY_RELAYS = "relay_urls"
         private const val KEY_PARTNER_NPUB = "partner_npub"
+        private const val KEY_PARTNER_NIP05 = "partner_nip05"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"
     }
 }

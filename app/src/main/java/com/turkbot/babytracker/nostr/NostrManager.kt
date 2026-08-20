@@ -27,6 +27,7 @@ import com.turkbot.babytracker.nostr.crypto.SignerMode
 import com.turkbot.babytracker.nostr.events.BackupService
 import com.turkbot.babytracker.nostr.events.NostrEvent
 import com.turkbot.babytracker.nostr.messaging.GiftWrapMessaging
+import com.turkbot.babytracker.nostr.nip05.Nip05Resolver
 import com.turkbot.babytracker.nostr.relay.RelayEvent
 import com.turkbot.babytracker.nostr.relay.RelayPool
 import kotlinx.coroutines.*
@@ -76,6 +77,7 @@ class NostrManager(context: Context) {
     val relayPool = RelayPool(effectiveRelays, httpClient)
     private val backupService = BackupService(appContext, relayPool)
     private val messaging = GiftWrapMessaging(relayPool)
+    val nip05Resolver = Nip05Resolver(httpClient, relayPool)
 
     private val _signer = MutableStateFlow<NostrSigner?>(null)
     val signer: StateFlow<NostrSigner?> = _signer
@@ -88,6 +90,9 @@ class NostrManager(context: Context) {
 
     private val _partnerNpub = MutableStateFlow<String?>(keyStore.getPartnerNpub())
     val partnerNpub: StateFlow<String?> = _partnerNpub
+
+    private val _partnerNip05 = MutableStateFlow<String?>(keyStore.getPartnerNip05())
+    val partnerNip05: StateFlow<String?> = _partnerNip05
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -223,13 +228,59 @@ class NostrManager(context: Context) {
      * Set or clear the partner's npub for shared baby data sync.
      * When set, backups are dual-published: self-encrypted + partner-encrypted.
      * The partner's app will receive and merge the data automatically.
+     * Also clears any cached partner NIP-05.
      */
     fun setPartnerNpub(npub: String?) {
         val trimmed = npub?.trim()?.takeIf { it.startsWith("npub1") }
         keyStore.savePartnerNpub(trimmed)
         _partnerNpub.value = trimmed
+        keyStore.savePartnerNip05(null)
+        _partnerNip05.value = null
         if (trimmed != null) {
             Log.d(TAG, "Partner npub set: ${trimmed.take(20)}...")
+        }
+    }
+
+    /**
+     * Set partner by accepting either an npub (npub1...) or a NIP-05 identifier
+     * (name@domain). If a NIP-05 is given, it is resolved via DNS to an npub first.
+     *
+     * @return true if the partner was set successfully, false if resolution failed
+     */
+    suspend fun setPartnerIdentifier(input: String): Boolean {
+        val trimmed = input.trim()
+        return if (trimmed.startsWith("npub1")) {
+            setPartnerNpub(trimmed)
+            true
+        } else if (nip05Resolver.isNip05(trimmed)) {
+            val npub = nip05Resolver.resolve(trimmed)
+            if (npub != null) {
+                setPartnerNpub(npub)
+                // Save the NIP-05 as the display name
+                keyStore.savePartnerNip05(trimmed)
+                _partnerNip05.value = trimmed
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    /**
+     * Fetch the partner's NIP-05 from their kind 0 metadata on relays and cache it.
+     * Call this after partner npub is set (e.g. via npub paste) to populate the
+     * human-readable display name.
+     */
+    suspend fun refreshPartnerNip05() {
+        val partnerNpub = _partnerNpub.value ?: return
+        val partnerHex = npubToHex(partnerNpub) ?: return
+        val nip05 = nip05Resolver.fetchNip05(partnerHex)
+        if (nip05 != null) {
+            keyStore.savePartnerNip05(nip05)
+            _partnerNip05.value = nip05
+            Log.d(TAG, "Partner NIP-05: $nip05")
         }
     }
 
@@ -263,6 +314,11 @@ class NostrManager(context: Context) {
         // Subscribe to partner sync events (kind 30078 where #p = our pubkey)
         val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["${BackupService.PARTNER_SYNC_D_TAG}"],"limit":1}"""
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
+
+        // If partner is set but we don't have their NIP-05 yet, fetch it
+        if (_partnerNpub.value != null && _partnerNip05.value == null) {
+            scope.launch { refreshPartnerNip05() }
+        }
 
         // Listen for incoming events
         scope.launch {
