@@ -63,7 +63,7 @@ private fun colorLabel(color: String): String = when (color) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiaperScreen(viewModel: BabyViewModel) {
+fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val diapers by viewModel.diapers.collectAsState()
 
     var selectedContents by remember { mutableStateOf("wet") }
@@ -176,6 +176,7 @@ fun DiaperScreen(viewModel: BabyViewModel) {
                                 note = noteText.ifBlank { null }
                             )
                             noteText = ""
+                            onSaved()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

@@ -36,7 +36,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthScreen(viewModel: BabyViewModel) {
+fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val healthRecords by viewModel.healthRecords.collectAsState()
 
     var temperatureText by remember { mutableStateOf("") }
@@ -146,6 +146,7 @@ fun HealthScreen(viewModel: BabyViewModel) {
                             doseText = ""
                             noteText = ""
                             showError = false
+                            onSaved()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

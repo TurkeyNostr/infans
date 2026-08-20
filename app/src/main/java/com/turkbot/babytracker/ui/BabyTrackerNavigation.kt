@@ -169,9 +169,9 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             composable(Screen.Weight.route) { WeightScreen(viewModel) }
             composable("milestones") { MilestonesScreen(viewModel) }
             composable("charts") { ChartsScreen(viewModel) }
-            composable("diaper") { DiaperScreen(viewModel) }
-            composable("pumping") { PumpingScreen(viewModel) }
-            composable("health") { HealthScreen(viewModel) }
+            composable("diaper") { DiaperScreen(viewModel, onSaved = { navController.popBackStack() }) }
+            composable("pumping") { PumpingScreen(viewModel, onSaved = { navController.popBackStack() }) }
+            composable("health") { HealthScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable(Screen.Messages.route) { MessagesScreen(viewModel, app.nostrManager) }
             composable("settings") { SettingsScreen(viewModel, app.nostrManager) }
         }

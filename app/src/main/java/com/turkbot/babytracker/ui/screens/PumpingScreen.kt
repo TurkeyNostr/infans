@@ -41,7 +41,7 @@ private val PUMP_SIDES = listOf("left", "right", "both")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PumpingScreen(viewModel: BabyViewModel) {
+fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val pumpings by viewModel.pumpings.collectAsState()
 
     var amountText by remember { mutableStateOf("") }
@@ -160,6 +160,7 @@ fun PumpingScreen(viewModel: BabyViewModel) {
                                 amountText = ""
                                 durationText = ""
                                 noteText = ""
+                                onSaved()
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
