@@ -52,7 +52,7 @@ class Nip05Resolver(
 ) {
     companion object {
         private const val TAG = "Nip05"
-        private const val SUB_PROFILE = "nip05_profile_sub"
+        private var subCounter = 0
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -131,10 +131,20 @@ class Nip05Resolver(
         val filter = """{"kinds":[0],"authors":["$pubkeyHex"],"limit":1}"""
         val deferred = CompletableDeferred<String?>()
 
+        // Use a unique subId per call so concurrent fetchNip05 calls (e.g.
+        // refreshMyNip05 + refreshPartnerNip05 during init) don't overwrite
+        // each other's subscription. Without this, the first kind-0 event
+        // received completes whichever deferred is waiting — your partner's
+        // NIP-05 could be stored as yours.
+        val subId = "nip05_${subCounter++}"
+
         // Start collector BEFORE subscribing so we don't miss the event.
         val job = scope.launch {
             relayPool.events.collect { wrapper ->
-                if (wrapper.subscriptionId == SUB_PROFILE && wrapper.event.kind == 0) {
+                if (wrapper.subscriptionId == subId && wrapper.event.kind == 0) {
+                    // Verify the event author matches the requested pubkey —
+                    // a relay could return a kind-0 from a different author.
+                    if (wrapper.event.pubkey != pubkeyHex) return@collect
                     try {
                         val metadata = json.parseToJsonElement(wrapper.event.content).jsonObject
                         val nip05 = metadata["nip05"]?.jsonPrimitive?.contentOrNull
@@ -151,13 +161,13 @@ class Nip05Resolver(
             }
         }
         // Subscribe after collector is ready
-        relayPool.subscribe(SUB_PROFILE, filter)
+        relayPool.subscribe(subId, filter)
 
         try {
             val result = deferred.await()
             result
         } finally {
-            relayPool.unsubscribe(SUB_PROFILE)
+            relayPool.unsubscribe(subId)
             job.cancel()
         }
     }

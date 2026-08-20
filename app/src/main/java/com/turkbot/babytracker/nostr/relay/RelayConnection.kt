@@ -38,17 +38,28 @@ class RelayConnection(
     private var ws: WebSocket? = null
     private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    /** Set to true by disconnect() to prevent the auto-reconnect in onFailure
+     *  from firing after the connection has been intentionally closed (e.g.
+     *  during relay reconfiguration). Without this, discarded connections
+     *  silently reconnect via the 5-second timer, leaking WebSocket connections. */
+    @Volatile
+    private var closed = false
+
     private val _state = MutableStateFlow(RelayState.DISCONNECTED)
     val state: StateFlow<RelayState> = _state
 
     // Incoming events are pushed to this channel
     val events = Channel<NostrEventWrapper>(Channel.BUFFERED)
 
-    // Pending subscription filters: subId → JSON filter
-    private val subscriptions = mutableMapOf<String, String>()
+    // Pending subscription filters: subId → JSON filter.
+    // Accessed from both coroutine threads (subscribe/unsubscribe) and the
+    // OkHttp WebSocket callback thread (onOpen resubscribe), so must be
+    // thread-safe to prevent ConcurrentModificationException.
+    private val subscriptions = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun connect() {
         if (_state.value == RelayState.CONNECTED || _state.value == RelayState.CONNECTING) return
+        closed = false
         _state.value = RelayState.CONNECTING
 
         val request = Request.Builder().url(url).build()
@@ -104,16 +115,19 @@ class RelayConnection(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("Relay", "Connection failure to $url: ${t.message}", t)
                 _state.value = RelayState.ERROR
-                // Auto-reconnect with delay
+                // Auto-reconnect with delay — but only if we haven't been
+                // intentionally closed (e.g. during relay reconfiguration).
+                if (closed) return
                 scope.launch {
                     delay(5000)
-                    connect()
+                    if (!closed) connect()
                 }
             }
         })
     }
 
     fun disconnect() {
+        closed = true
         ws?.close(1000, "Goodbye")
         ws = null
         _state.value = RelayState.DISCONNECTED
