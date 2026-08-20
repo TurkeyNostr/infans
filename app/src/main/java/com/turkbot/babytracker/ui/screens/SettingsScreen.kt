@@ -338,13 +338,6 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium
                                     )
-                                    if (partnerNip05 != null) {
-                                        Text(
-                                            currentPartner!!.take(24) + "...",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
                                 }
                             }
                             Spacer(Modifier.height(12.dp))

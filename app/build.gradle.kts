@@ -14,8 +14,8 @@ android {
         applicationId = "com.turkbot.babytracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 23
-        versionName = "1.4.17"
+        versionCode = 24
+        versionName = "1.4.18"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
