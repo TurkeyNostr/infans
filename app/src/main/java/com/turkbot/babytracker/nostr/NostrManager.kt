@@ -30,6 +30,7 @@ import com.turkbot.babytracker.nostr.messaging.GiftWrapMessaging
 import com.turkbot.babytracker.nostr.nip05.Nip05Resolver
 import com.turkbot.babytracker.nostr.relay.RelayEvent
 import com.turkbot.babytracker.nostr.relay.RelayPool
+import com.turkbot.babytracker.nostr.relay.RelayState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,7 +89,43 @@ class NostrManager(context: Context) {
     private val _relayConnected = MutableStateFlow(false)
     val relayConnected: StateFlow<Boolean> = _relayConnected
 
-    /** Current relay URLs the pool is connected to (for display in Settings) */
+    /** Per-relay connection states (url → state) for the relay checker UI. */
+    fun relayStates(): List<Pair<String, RelayState>> = relayPool.relayStates()
+
+    /**
+     * Check whether the partner has published any kind 30078 events to our
+     * shared relays. Returns a map of relay URL → Boolean (true if the relay
+     * returned at least one event from the partner).
+     */
+    suspend fun checkPartnerReachable(): Map<String, Boolean> {
+        val partnerNpubVal = _partnerNpub.value ?: return emptyMap()
+        val partnerHex = npubToHex(partnerNpubVal) ?: return emptyMap()
+        val filter = """{"kinds":[30078],"authors":["$partnerHex"],"limit":1}"""
+        val subId = "partner_check"
+        val seen = mutableSetOf<String>()
+
+        val job = scope.launch {
+            relayPool.events.collect { wrapper ->
+                if (wrapper.subscriptionId == subId) {
+                    seen.add(wrapper.relayUrl)
+                }
+            }
+        }
+
+        relayPool.subscribe(subId, filter)
+
+        // Give all relays 5 seconds to respond
+        kotlinx.coroutines.delay(5_000)
+        relayPool.unsubscribe(subId)
+        job.cancel()
+
+        // Build results: true for relays that returned events, false for others
+        val results = mutableMapOf<String, Boolean>()
+        relayPool.relayStates().forEach { (url, _) ->
+            results[url] = seen.contains(url)
+        }
+        return results.toMap()
+    }
     val currentRelays: StateFlow<List<String>> = MutableStateFlow(effectiveRelays)
 
     private val _partnerNpub = MutableStateFlow<String?>(keyStore.getPartnerNpub())

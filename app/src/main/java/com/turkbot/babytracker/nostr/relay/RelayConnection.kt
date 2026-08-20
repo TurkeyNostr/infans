@@ -30,7 +30,7 @@ import kotlinx.serialization.json.*
  * Multiple relays are used in parallel for redundancy (like Runstr: damus, nos.lol, etc).
  */
 class RelayConnection(
-    private val url: String,
+    val url: String,
     private val client: OkHttpClient
 ) {
     private var ws: WebSocket? = null

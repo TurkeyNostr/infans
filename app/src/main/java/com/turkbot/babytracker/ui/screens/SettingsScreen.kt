@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.nostr.crypto.SignerType
+import com.turkbot.babytracker.nostr.relay.RelayState
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -48,6 +49,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     val signer by nostrManager.signer.collectAsState()
     val relayConnected by nostrManager.relayConnected.collectAsState()
     val currentRelays by nostrManager.currentRelays.collectAsState()
+    val partnerNpubState by viewModel.partnerNpub.collectAsState()
     val scope = rememberCoroutineScope()
 
     var showAddChild by remember { mutableStateOf(false) }
@@ -415,48 +417,164 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
 
         // ─── Relay Status ────────────────────────────────
         item {
+            var relayCheckResult by remember { mutableStateOf<Map<String, Boolean>?>(null) }
+            var checking by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Relay Status", style = MaterialTheme.typography.bodyLarge)
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(if (relayConnected) "Connected" else "Disconnected")
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (relayConnected)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.errorContainer,
-                            labelColor = if (relayConnected)
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            else
-                                MaterialTheme.colorScheme.onErrorContainer
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Relay Status", style = MaterialTheme.typography.bodyLarge)
+                        AssistChip(
+                            onClick = {},
+                            label = {
+                                Text(if (relayConnected) "Connected" else "Disconnected")
+                            },
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = if (relayConnected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.errorContainer,
+                                labelColor = if (relayConnected)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onErrorContainer
+                            )
                         )
-                    )
-                }
-            }
-        }
+                    }
 
-        item {
-            // ─── Active Relay List ────────────────────────────
-            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                currentRelays.forEach { url ->
-                    Text(
-                        text = url,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 2.dp)
-                    )
+                    // Per-relay connection status
+                    nostrManager.relayStates().forEach { (url, state) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = url.removePrefix("wss://"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            AssistChip(
+                                onClick = {},
+                                label = {
+                                    Text(
+                                        when (state) {
+                                            RelayState.CONNECTED -> "✓"
+                                            RelayState.CONNECTING -> "…"
+                                            RelayState.ERROR -> "✗"
+                                            RelayState.DISCONNECTED -> "—"
+                                        }
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = when (state) {
+                                        RelayState.CONNECTED -> MaterialTheme.colorScheme.primaryContainer
+                                        RelayState.CONNECTING -> MaterialTheme.colorScheme.secondaryContainer
+                                        else -> MaterialTheme.colorScheme.errorContainer
+                                    },
+                                    labelColor = when (state) {
+                                        RelayState.CONNECTED -> MaterialTheme.colorScheme.onPrimaryContainer
+                                        RelayState.CONNECTING -> MaterialTheme.colorScheme.onSecondaryContainer
+                                        else -> MaterialTheme.colorScheme.onErrorContainer
+                                    }
+                                )
+                            )
+                        }
+                    }
+
+                    // Partner reachability check
+                    if (partnerNpubState != null) {
+                        HorizontalDivider()
+                        Text(
+                            "Partner Reachability",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            "Checks if your partner has published data to these same relays.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        if (relayCheckResult != null) {
+                            relayCheckResult!!.forEach { (url, reachable) ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = url.removePrefix("wss://"),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    AssistChip(
+                                        onClick = {},
+                                        label = {
+                                            Text(if (reachable) "Found" else "No data")
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = if (reachable)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.errorContainer,
+                                            labelColor = if (reachable)
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    )
+                                }
+                            }
+                            if (relayCheckResult!!.values.all { !it }) {
+                                Text(
+                                    "Your partner hasn't published to any of these relays. Make sure they're on the same version and have added data.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            } else {
+                                Text(
+                                    "✓ Partner data found on shared relays — sync should work.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                checking = true
+                                relayCheckResult = null
+                                scope.launch {
+                                    relayCheckResult = nostrManager.checkPartnerReachable()
+                                    checking = false
+                                }
+                            },
+                            enabled = !checking && relayConnected,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (checking) "Checking…" else "Check Partner Connection")
+                        }
+                    } else {
+                        Text(
+                            "Set partner npub to check reachability.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

@@ -101,4 +101,8 @@ class RelayPool(
     }
 
     fun connectedCount(): Int = connections.count { it.state.value == RelayState.CONNECTED }
+
+    /** Per-relay connection states for the relay checker UI. */
+    fun relayStates(): List<Pair<String, RelayState>> =
+        connections.map { it.url to it.state.value }
 }
