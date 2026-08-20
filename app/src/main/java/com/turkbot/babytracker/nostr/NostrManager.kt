@@ -356,6 +356,18 @@ class NostrManager(context: Context) {
      */
     private suspend fun handleIncomingDM(event: RelayEvent, signer: NostrSigner) {
         val unwrapped = messaging.unwrapGiftWrap(event, signer) ?: return
+
+        // Only accept DMs from the configured partner
+        val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
+        if (expectedPartnerHex == null) {
+            Log.w(TAG, "DM received but no partner npub configured — ignoring")
+            return
+        }
+        if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
+            Log.w(TAG, "DM from non-partner pubkey ${unwrapped.senderPubkeyHex.take(20)}... — ignoring")
+            return
+        }
+
         val chatMsg = ChatMessage(
             id = event.id,
             senderPubkey = unwrapped.senderPubkeyHex,
@@ -364,7 +376,7 @@ class NostrManager(context: Context) {
             createdAt = unwrapped.createdAt
         )
         repo.saveMessage(chatMsg)
-        Log.d(TAG, "Stored DM from ${unwrapped.senderNpub.take(20)}...")
+        Log.d(TAG, "Stored DM from partner")
     }
 
     /**
@@ -446,9 +458,19 @@ class NostrManager(context: Context) {
 
     /**
      * Send a DM to the other parent.
+     * Only allows sending to the configured partner npub — blocks sends to
+     * arbitrary recipients to prevent accidental data leakage.
      */
     suspend fun sendMessage(text: String, recipientNpub: String): Boolean {
         val signer = _signer.value ?: return false
+
+        // Enforce partner-only messaging
+        val configuredPartner = _partnerNpub.value
+        if (configuredPartner == null || configuredPartner != recipientNpub.trim()) {
+            Log.w(TAG, "Blocked send to non-partner recipient — only the configured partner is allowed")
+            return false
+        }
+
         return messaging.sendDirectMessage(text, signer, recipientNpub)
     }
 

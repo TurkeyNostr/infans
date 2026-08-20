@@ -37,6 +37,7 @@ import java.util.*
 fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
     val messages by viewModel.messages.collectAsState()
     val signer by nostrManager.signer.collectAsState()
+    val partnerState by nostrManager.partnerNpub.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -98,11 +99,12 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         }
 
         // Partner npub input (shown if not set)
-        if (nostrManager.partnerNpub == null) {
+        if (partnerState == null) {
             OutlinedTextField(
                 value = partnerNpub,
                 onValueChange = { partnerNpub = it },
                 label = { Text("Partner's npub") },
+                supportingText = { Text("Messaging is limited to your partner only") },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 singleLine = true
             )
@@ -138,21 +140,37 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                 Spacer(Modifier.width(8.dp))
                 FilledIconButton(
                     onClick = {
-                        val recipient = nostrManager.partnerNpub.value ?: partnerNpub.trim()
-                        if (recipient.isEmpty() || inputText.isBlank()) {
-                            error = "Enter partner's npub and a message"
-                            return@FilledIconButton
-                        }
-                        error = null
-                        scope.launch {
-                            val success = nostrManager.sendMessage(inputText, recipient)
-                            if (success) {
-                                inputText = ""
-                                if (nostrManager.partnerNpub.value == null && partnerNpub.isNotBlank()) {
-                                    nostrManager.setPartnerNpub(partnerNpub.trim())
+                        if (partnerState != null) {
+                            // Partner already configured — send directly
+                            if (inputText.isBlank()) {
+                                error = "Enter a message"
+                                return@FilledIconButton
+                            }
+                            error = null
+                            scope.launch {
+                                val success = nostrManager.sendMessage(inputText, partnerState!!)
+                                if (success) {
+                                    inputText = ""
+                                } else {
+                                    error = "Failed to send — check relay connection"
                                 }
-                            } else {
-                                error = "Failed to send — check relay connection"
+                            }
+                        } else {
+                            // First-time setup: set partner npub then send
+                            val trimmedNpub = partnerNpub.trim()
+                            if (trimmedNpub.isEmpty() || inputText.isBlank()) {
+                                error = "Enter partner's npub and a message"
+                                return@FilledIconButton
+                            }
+                            error = null
+                            nostrManager.setPartnerNpub(trimmedNpub)
+                            scope.launch {
+                                val success = nostrManager.sendMessage(inputText, trimmedNpub)
+                                if (success) {
+                                    inputText = ""
+                                } else {
+                                    error = "Failed to send — check relay connection"
+                                }
                             }
                         }
                     }
