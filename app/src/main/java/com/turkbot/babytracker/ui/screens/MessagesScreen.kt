@@ -84,7 +84,7 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             if (messages.isEmpty()) {
                 item {
                     Text(
-                        "No messages yet. Share your npub with the other parent and their npub here to start chatting.",
+                        "No messages yet. Share your npub with the other parent to start chatting.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
