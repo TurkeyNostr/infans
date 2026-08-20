@@ -119,13 +119,19 @@ class GiftWrapMessaging(
      *
      * @param event The gift wrap event from relays
      * @param signer Our signer (local key or Amber)
-     * @return UnwrappedMessage or null if decryption fails
+     * @param expectedSenderHex If non-null, only decrypt the inner layer if the
+     *   seal's pubkey matches this. Saves one Amber decrypt for non-partner DMs.
+     * @return UnwrappedMessage or null if decryption fails or sender doesn't match
      */
-    suspend fun unwrapGiftWrap(event: RelayEvent, signer: NostrSigner): UnwrappedMessage? {
+    suspend fun unwrapGiftWrap(
+        event: RelayEvent,
+        signer: NostrSigner,
+        expectedSenderHex: String? = null
+    ): UnwrappedMessage? {
         try {
             // 1. NIP-44 decrypt the gift wrap content (using one-time sender pubkey)
-            //    We can use local decrypt for the outer layer only if we have the local key.
-            //    With Amber, the decryption must go through Amber (our signer).
+            //    The sender's real pubkey is NOT known yet — it's hidden inside the
+            //    seal. This decrypt is unavoidable regardless of sender filtering.
             val sealJson = signer.nip44Decrypt(event.content, event.pubkey)
 
             // 2. Parse the seal (kind 13)
@@ -135,10 +141,17 @@ class GiftWrapMessaging(
             // 3. Verify the seal's Schnorr signature — prevents forged sender identity
             require(seal.verifySignature()) { "Seal signature verification failed" }
 
-            // 4. NIP-44 decrypt the seal content → rumor JSON (via signer)
+            // 4. If we only want messages from a specific sender, check NOW — before
+            //    the expensive second decrypt. The seal's pubkey is the real sender.
+            if (expectedSenderHex != null && seal.pubkey != expectedSenderHex) {
+                Log.d(TAG, "Seal from non-expected sender ${seal.pubkey.take(20)}... — skipping second decrypt")
+                return null
+            }
+
+            // 5. NIP-44 decrypt the seal content → rumor JSON (via signer)
             val rumorJson = signer.nip44Decrypt(seal.content, seal.pubkey)
 
-            // 5. Parse the rumor (kind 14)
+            // 6. Parse the rumor (kind 14)
             val rumor = NostrEvent.fromJson(rumorJson)
             require(rumor.kind == KIND_PRIVATE_DIRECT_MESSAGE) { "Expected kind 14, got ${rumor.kind}" }
 

@@ -421,16 +421,23 @@ class NostrManager(context: Context) {
             return
         }
 
-        val unwrapped = messaging.unwrapGiftWrap(event, signer) ?: return
-
-        // Only accept DMs from the configured partner
+        // Get expected partner hex for early sender filtering. If partner is not
+        // configured, skip all DMs — no point decrypting messages we'll reject.
         val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
         if (expectedPartnerHex == null) {
             Log.w(TAG, "DM received but no partner npub configured — ignoring")
             return
         }
+
+        // Unwrap with sender filter: only does the second (expensive) Amber decrypt
+        // if the seal's pubkey matches our partner. Non-partner DMs still require
+        // the first decrypt (sender identity is hidden inside the seal by NIP-17),
+        // but skip the second decrypt entirely.
+        val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
+
+        // Double-check: unwrapGiftWrap already filtered, but verify for safety
         if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
-            Log.w(TAG, "DM from non-partner pubkey ${unwrapped.senderPubkeyHex.take(20)}... — ignoring")
+            Log.w(TAG, "DM from non-partner pubkey — ignoring")
             return
         }
 
