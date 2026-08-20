@@ -307,12 +307,17 @@ class NostrManager(context: Context) {
         val dmFilter = """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
         relayPool.subscribe(SUB_DMS, dmFilter)
 
-        // Subscribe to our own encrypted backups (kind 30078)
-        val backupFilter = """{"kinds":[30078],"authors":["$myPubkeyHex"],"#d":["${BackupService.BACKUP_D_TAG}"],"limit":1}"""
+        // Subscribe to our own encrypted backups (kind 30078 authored by us).
+        // We don't filter by #d tag because some relays don't support combining
+        // authors + tag filters. We filter by d-tag client-side instead.
+        val backupFilter = """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":50}"""
         relayPool.subscribe(SUB_BACKUP, backupFilter)
 
-        // Subscribe to partner sync events (kind 30078 where #p = our pubkey)
-        val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["${BackupService.PARTNER_SYNC_D_TAG}"],"limit":1}"""
+        // Subscribe to partner sync events (kind 30078 where #p = our pubkey).
+        // We don't filter by #d tag here because many relays don't support querying
+        // by multiple different tag types simultaneously. Instead we fetch all
+        // kind 30078 events that p-tag us and filter by d-tag client-side.
+        val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":50}"""
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
 
         // If partner is set but we don't have their NIP-05 yet, fetch it
@@ -454,8 +459,14 @@ class NostrManager(context: Context) {
 
     /**
      * Decrypt and restore a backup event.
+     * Only processes events with d-tag = BACKUP_D_TAG (our self-backup).
      */
     private suspend fun handleBackupEvent(event: RelayEvent, signer: NostrSigner) {
+        val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
+        if (dTag != BackupService.BACKUP_D_TAG) {
+            Log.d(TAG, "Kind 30078 from us but d-tag is '$dTag' (not self-backup) — ignoring")
+            return
+        }
         val payload = backupService.decryptBackup(event.content, signer) ?: return
         restoreFromPayload(payload)
         Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
@@ -469,6 +480,14 @@ class NostrManager(context: Context) {
      * before decrypting, preventing arbitrary relay-injected data merges.
      */
     private suspend fun handlePartnerSyncEvent(event: RelayEvent, signer: NostrSigner) {
+        // Check the d-tag client-side — we couldn't filter by it in the relay
+        // subscription because many relays don't support multi-tag queries.
+        val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
+        if (dTag != BackupService.PARTNER_SYNC_D_TAG) {
+            Log.d(TAG, "Kind 30078 p-tagged us but d-tag is '$dTag' (not partner sync) — ignoring")
+            return
+        }
+
         // Verify the sender is our configured partner
         val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
         if (expectedPartnerHex == null) {
