@@ -162,6 +162,12 @@ class NostrManager(context: Context) {
     @Volatile
     private var lastSelfExportTime: Long = 0L
 
+    /** Debounce job for exportBackup — coalesces rapid calls into a single
+     *  export so the user isn't bombarded with Amber prompts when entering
+     *  multiple data items in quick succession (e.g. feeding + diaper + sleep).
+     *  Without this, 3 quick entries = 12 Amber prompts (4 per export). */
+    private var pendingExportJob: Job? = null
+
     companion object {
         private const val TAG = "NostrManager"
         const val SUB_DMS = "baby_dm_sub"
@@ -909,17 +915,39 @@ class NostrManager(context: Context) {
      * Export encrypted backup to relays.
      * If a partner npub is set, also publishes a partner-encrypted copy so the
      * co-parent's app can merge the data.
+     *
+     * Debounced: rapid calls (e.g. entering feeding + diaper + sleep in quick
+     * succession) coalesce into a single export after a 2-second quiet period.
+     * With Amber as signer, each export costs 2-4 user-approved prompts, so
+     * batching is critical to prevent prompt fatigue.
      */
     suspend fun exportBackup(): Boolean {
         val signer = _signer.value ?: return false
-        // Serialize all Amber operations — exports, DM sends, and incoming
-        // event handlers all go through this mutex so their encrypt/sign/decrypt
-        // prompts can't interleave.
-        return amberMutex.withLock {
-            // Record publish time so the event collector can skip the relay echo
-            lastSelfExportTime = System.currentTimeMillis() / 1000
-            _exportBackupLocked(signer)
+
+        // Skip if no relays are connected — the publish would be silently
+        // dropped and the user would approve Amber prompts for nothing.
+        if (!relayPool.anyConnected.value) {
+            Dbg.warn(Cat.SYNC, "Skipping export — no relays connected")
+            return false
         }
+
+        // Cancel any pending debounced export and start a new timer.
+        // This coalesces rapid calls into one export after 2 seconds of quiet.
+        pendingExportJob?.cancel()
+        val deferred = CompletableDeferred<Boolean>()
+        pendingExportJob = scope.launch {
+            delay(2_000) // 2-second debounce window
+            try {
+                val result = amberMutex.withLock {
+                    lastSelfExportTime = System.currentTimeMillis() / 1000
+                    _exportBackupLocked(signer)
+                }
+                deferred.complete(result)
+            } catch (e: Exception) {
+                deferred.complete(false)
+            }
+        }
+        return deferred.await()
     }
 
     private suspend fun _exportBackupLocked(signer: NostrSigner): Boolean {
@@ -1043,6 +1071,7 @@ class NostrManager(context: Context) {
      * Disconnect everything.
      */
     fun shutdown() {
+        pendingExportJob?.cancel()
         relayPool.disconnect()
         scope.cancel()
     }

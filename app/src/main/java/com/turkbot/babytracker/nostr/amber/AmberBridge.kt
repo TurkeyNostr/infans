@@ -14,6 +14,8 @@ package com.turkbot.babytracker.nostr.amber
 
 import android.content.Intent
 import androidx.activity.result.ActivityResult
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 object AmberBridge {
 
     private var launcherRef: ((Intent) -> Unit)? = null
+    @Volatile
     private var currentChannel: Channel<ActivityResult>? = null
     private val mutex = Mutex()
 
@@ -53,6 +56,7 @@ object AmberBridge {
         launcherRef = null
         currentChannel?.close()
         currentChannel = null
+        Dbg.info(Cat.AMBER, "AmberBridge unbound — Activity destroyed")
     }
 
     fun isBound(): Boolean = launcherRef != null
