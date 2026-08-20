@@ -137,9 +137,26 @@ class SecureKeyStore(context: Context) {
         prefs.edit().putString(KEY_PROCESSED_EVENTS, trimmed.joinToString(",")).apply()
     }
 
-    /** Clear the processed-events cache (used after deleting relay data). */
+    /** Clear the processed-events cache and last-seen timestamps (used after deleting relay data). */
     fun clearProcessedEvents() {
-        prefs.edit().remove(KEY_PROCESSED_EVENTS).apply()
+        prefs.edit()
+            .remove(KEY_PROCESSED_EVENTS)
+            .remove(KEY_LAST_DM_TIME)
+            .remove(KEY_LAST_BACKUP_TIME)
+            .apply()
+    }
+
+    // ── Last-seen timestamps (avoid re-fetching history) ───
+    /** Unix seconds of the most recent DM event we've processed. */
+    fun getLastDmTime(): Long = prefs.getLong(KEY_LAST_DM_TIME, 0L)
+    fun saveLastDmTime(seconds: Long) {
+        prefs.edit().putLong(KEY_LAST_DM_TIME, seconds).apply()
+    }
+
+    /** Unix seconds of the most recent backup/sync event we've processed. */
+    fun getLastBackupTime(): Long = prefs.getLong(KEY_LAST_BACKUP_TIME, 0L)
+    fun saveLastBackupTime(seconds: Long) {
+        prefs.edit().putLong(KEY_LAST_BACKUP_TIME, seconds).apply()
     }
 
     // ── Partner sync ───────────────────────────────────
@@ -192,6 +209,8 @@ class SecureKeyStore(context: Context) {
         private const val KEY_SIGNER_PKG = "signer_package"
         private const val KEY_RELAYS = "relay_urls"
         private const val KEY_PROCESSED_EVENTS = "processed_sync_events"
+        private const val KEY_LAST_DM_TIME = "last_dm_time"
+        private const val KEY_LAST_BACKUP_TIME = "last_backup_time"
         private const val KEY_PARTNER_NPUB = "partner_npub"
         private const val KEY_PARTNER_NIP05 = "partner_nip05"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"

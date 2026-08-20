@@ -285,6 +285,8 @@ class NostrManager(context: Context) {
         _partnerNip05.value = null
         if (trimmed != null) {
             Log.d(TAG, "Partner npub set: ${trimmed.take(20)}...")
+            // Clear processed-events cache so we re-fetch partner data fresh
+            keyStore.clearProcessedEvents()
         }
     }
 
@@ -387,21 +389,38 @@ class NostrManager(context: Context) {
         // Now connect and subscribe — the collector is already listening
         relayPool.connect()
 
-        // Subscribe to gift-wrapped DMs (kind 1059) addressed to us
-        val dmFilter = """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
+        // Subscribe to gift-wrapped DMs (kind 1059) addressed to us.
+        // Use 'since' to only fetch new DMs since last launch — avoids re-decrypting
+        // 100 historical DMs (each triggering 2 Amber prompts) on every reconnect.
+        val lastDmTime = keyStore.getLastDmTime()
+        val dmFilter = if (lastDmTime > 0) {
+            """{"kinds":[1059],"#p":["$myPubkeyHex"],"since":$lastDmTime,"limit":100}"""
+        } else {
+            """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
+        }
         relayPool.subscribe(SUB_DMS, dmFilter)
 
         // Subscribe to our own encrypted backups (kind 30078 authored by us).
         // We don't filter by #d tag because some relays don't support combining
         // authors + tag filters. We filter by d-tag client-side instead.
-        val backupFilter = """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":10}"""
+        // Use 'since' to avoid re-processing old backups on every reconnect.
+        val lastBackupTime = keyStore.getLastBackupTime()
+        val backupFilter = if (lastBackupTime > 0) {
+            """{"kinds":[30078],"authors":["$myPubkeyHex"],"since":$lastBackupTime,"limit":10}"""
+        } else {
+            """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":10}"""
+        }
         relayPool.subscribe(SUB_BACKUP, backupFilter)
 
         // Subscribe to partner sync events (kind 30078 where #p = our pubkey).
         // We don't filter by #d tag here because many relays don't support querying
         // by multiple different tag types simultaneously. Instead we fetch all
         // kind 30078 events that p-tag us and filter by d-tag client-side.
-        val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
+        val partnerSyncFilter = if (lastBackupTime > 0) {
+            """{"kinds":[30078],"#p":["$myPubkeyHex"],"since":$lastBackupTime,"limit":10}"""
+        } else {
+            """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
+        }
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
 
         // Also subscribe to ALL kind 30078 events authored by our partner, in case
@@ -410,7 +429,11 @@ class NostrManager(context: Context) {
         if (partnerNpubVal != null) {
             val partnerHex = npubToHex(partnerNpubVal)
             if (partnerHex != null) {
-                val partnerAuthorFilter = """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                val partnerAuthorFilter = if (lastBackupTime > 0) {
+                    """{"kinds":[30078],"authors":["$partnerHex"],"since":$lastBackupTime,"limit":10}"""
+                } else {
+                    """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                }
                 relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
             }
         }
@@ -430,6 +453,20 @@ class NostrManager(context: Context) {
         if (relays.isNotEmpty()) {
             Log.d(TAG, "NIP-65: found ${relays.size} relays for user, applying")
             applyRelays(relays)
+            // Re-subscribe partner sync on the new relays if partner is configured
+            val partnerNpubVal = _partnerNpub.value
+            if (partnerNpubVal != null) {
+                val partnerHex = npubToHex(partnerNpubVal)
+                if (partnerHex != null) {
+                    val lastBackupTime = keyStore.getLastBackupTime()
+                    val partnerAuthorFilter = if (lastBackupTime > 0) {
+                        """{"kinds":[30078],"authors":["$partnerHex"],"since":$lastBackupTime,"limit":10}"""
+                    } else {
+                        """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                    }
+                    relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
+                }
+            }
         } else {
             Log.d(TAG, "NIP-65: no relay list found, keeping default relays")
         }
@@ -471,6 +508,9 @@ class NostrManager(context: Context) {
 
     /**
      * Apply a new relay set: save to storage, reconfigure the pool.
+     * Merges NIP-65 relays with default relays so both parents always share
+     * at least the default relays — preventing disjoint relay sets where
+     * partner data can't be found.
      */
     private fun applyRelays(urls: List<String>) {
         if (urls.isEmpty()) return
@@ -479,10 +519,14 @@ class NostrManager(context: Context) {
             .distinct()
         if (sanitized.isEmpty()) return
 
-        keyStore.saveRelays(sanitized)
-        relayPool.reconfigure(sanitized)
-        (currentRelays as MutableStateFlow).value = sanitized
-        Log.d(TAG, "Relays updated to: $sanitized")
+        // Merge NIP-65 relays with defaults — guarantees both parents share
+        // at least the default relays even if their NIP-65 lists differ
+        val merged = (sanitized + defaultRelays).distinct()
+
+        keyStore.saveRelays(merged)
+        relayPool.reconfigure(merged)
+        (currentRelays as MutableStateFlow).value = merged
+        Log.d(TAG, "Relays updated to: $merged (NIP-65 + defaults merged)")
     }
 
     /**
@@ -576,6 +620,9 @@ class NostrManager(context: Context) {
         )
         repo.saveMessage(chatMsg)
         Log.d(TAG, "Stored DM from partner")
+
+        // Save timestamp so next launch only fetches newer DMs
+        keyStore.saveLastDmTime(event.createdAt)
     }
 
     /**
@@ -596,6 +643,7 @@ class NostrManager(context: Context) {
         }
         val payload = backupService.decryptBackup(event.content, signer) ?: return
         keyStore.markEventProcessed(event.id)
+        keyStore.saveLastBackupTime(event.createdAt)
         restoreFromPayload(payload)
         Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
     }
@@ -646,6 +694,7 @@ class NostrManager(context: Context) {
 
         val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
         keyStore.markEventProcessed(event.id)
+        keyStore.saveLastBackupTime(event.createdAt)
         restoreFromPayload(payload)
         Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
     }

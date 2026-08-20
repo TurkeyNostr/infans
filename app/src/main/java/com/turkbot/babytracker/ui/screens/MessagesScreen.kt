@@ -76,7 +76,7 @@ fun MessagesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Partner header
         if (partnerState != null) {
             Surface(

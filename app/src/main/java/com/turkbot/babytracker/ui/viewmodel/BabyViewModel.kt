@@ -13,6 +13,7 @@
 package com.turkbot.babytracker.ui.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.*
 import com.turkbot.babytracker.BabyTrackerApp
 import com.turkbot.babytracker.data.PdfExporter
@@ -30,6 +31,10 @@ class BabyViewModel(
     private val repo: BabyRepository,
     private val nostr: NostrManager
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "BabyViewModel"
+    }
 
     // Active child selection
     private val _activeChildId = MutableStateFlow<String?>(null)
@@ -109,8 +114,12 @@ class BabyViewModel(
     }
 
     // ── Feeding ───────────────────────────────────────
-    fun addFeeding(type: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?) {
-        val child = activeChild.value ?: return
+    fun addFeeding(type: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?): Boolean {
+        val child = activeChild.value
+        if (child == null) {
+            Log.w(TAG, "addFeeding: no active child — not saving")
+            return false
+        }
         viewModelScope.launch {
             repo.saveFeeding(Feeding(
                 id = UUID.randomUUID().toString(),
@@ -125,6 +134,7 @@ class BabyViewModel(
             ))
             nostr.exportBackup()
         }
+        return true
     }
 
     fun deleteFeeding(id: String) {

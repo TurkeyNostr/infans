@@ -54,6 +54,15 @@ fun FeedScreen(viewModel: BabyViewModel) {
     var selectedSide by remember { mutableStateOf("left") }
     var durationText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+
+    LaunchedEffect(saveError) {
+        saveError?.let {
+            snackbarHostState.showSnackbar(it)
+            saveError = null
+        }
+    }
 
     val todayFeedings = remember(feedings) {
         val cal = Calendar.getInstance()
@@ -65,11 +74,12 @@ fun FeedScreen(viewModel: BabyViewModel) {
         feedings.filter { it.time >= startOfDay }.sortedByDescending { it.time }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 16.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
         // ── Form card ──────────────────────────────────────
         item {
             Card(
@@ -199,7 +209,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 "solids" -> selectedSolidUnit
                                 else -> null
                             }
-                            viewModel.addFeeding(
+                            val saved = viewModel.addFeeding(
                                 type = selectedType,
                                 amount = amount,
                                 unit = unit,
@@ -207,9 +217,13 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 duration = duration,
                                 note = noteText.ifBlank { null }
                             )
-                            amountText = ""
-                            durationText = ""
-                            noteText = ""
+                            if (saved) {
+                                amountText = ""
+                                durationText = ""
+                                noteText = ""
+                            } else {
+                                saveError = "No child selected — add a baby first"
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -256,6 +270,11 @@ fun FeedScreen(viewModel: BabyViewModel) {
                 )
             }
         }
+    }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 
