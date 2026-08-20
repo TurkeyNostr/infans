@@ -69,6 +69,7 @@ class BabyRepository(context: Context) {
     // ── Chat messages ─────────────────────────────────
     fun messages(): Flow<List<ChatMessage>> = chatDao.getAll()
     suspend fun saveMessage(msg: ChatMessage) = chatDao.insert(msg)
+    suspend fun messageExists(id: String): Boolean = chatDao.exists(id) > 0
     suspend fun markMessageRead(id: String) = chatDao.markRead(id)
     fun unreadCount(): Flow<Int> = chatDao.unreadCount()
 

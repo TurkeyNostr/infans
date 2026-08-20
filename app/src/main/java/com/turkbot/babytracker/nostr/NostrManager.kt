@@ -409,8 +409,18 @@ class NostrManager(context: Context) {
 
     /**
      * Decrypt and store an incoming gift-wrapped DM.
+     *
+     * Skips messages already in the DB (by event ID) to avoid redundant Amber
+     * decrypt prompts on reconnect. With Amber as signer, each decrypt launches
+     * an Activity, so dedup is critical to prevent prompt storms.
      */
     private suspend fun handleIncomingDM(event: RelayEvent, signer: NostrSigner) {
+        // Skip already-stored messages — avoids redundant Amber decrypt prompts
+        if (repo.messageExists(event.id)) {
+            Log.d(TAG, "DM ${event.id.take(12)} already stored — skipping")
+            return
+        }
+
         val unwrapped = messaging.unwrapGiftWrap(event, signer) ?: return
 
         // Only accept DMs from the configured partner

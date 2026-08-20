@@ -15,6 +15,8 @@ package com.turkbot.babytracker.nostr.amber
 import android.content.Intent
 import androidx.activity.result.ActivityResult
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
@@ -26,11 +28,17 @@ import kotlinx.coroutines.Dispatchers
  * launcher and awaits the result channel.
  *
  * This must be bound before any Amber operation is attempted.
+ *
+ * CRITICAL: All Amber operations are serialized via a mutex. Only one intent is
+ * in-flight at a time — subsequent callers queue and wait. This prevents the
+ * prompt storm where 100 historical DMs each fire two decrypt intents at Amber
+ * simultaneously, overwhelming the signer and crashing the app.
  */
 object AmberBridge {
 
     private var launcherRef: ((Intent) -> Unit)? = null
-    private var resultChannel: Channel<ActivityResult>? = null
+    private var currentChannel: Channel<ActivityResult>? = null
+    private val mutex = Mutex()
 
     /**
      * Called from MainActivity's DisposableEffect.
@@ -43,8 +51,8 @@ object AmberBridge {
 
     fun unbind() {
         launcherRef = null
-        resultChannel?.close()
-        resultChannel = null
+        currentChannel?.close()
+        currentChannel = null
     }
 
     fun isBound(): Boolean = launcherRef != null
@@ -52,18 +60,24 @@ object AmberBridge {
     /**
      * Launch an Intent and suspend until the result returns.
      * Must be called from a coroutine. The result is delivered via [handleResult].
+     *
+     * Serialized: only one Amber intent is in-flight at a time. If another call
+     * is already waiting for a result, this call blocks on the mutex until that
+     * result returns, then proceeds.
      */
-    suspend fun launch(intent: Intent): ActivityResult {
+    suspend fun launch(intent: Intent): ActivityResult = mutex.withLock {
         val launchFn = launcherRef ?: throw IllegalStateException(
             "AmberBridge is not bound. Call AmberBridge.bind() from MainActivity first."
         )
-        val channel = Channel<ActivityResult>(1).also { resultChannel = it }
+        val channel = Channel<ActivityResult>(1).also { currentChannel = it }
         // ActivityResultLauncher.launch() must be called on the main thread.
         // Relay event handlers run on Dispatchers.IO, so we hop to Main here.
         withContext(Dispatchers.Main) {
             launchFn(intent)
         }
-        return channel.receive()
+        val result = channel.receive()
+        currentChannel = null
+        result
     }
 
     /**
@@ -71,7 +85,7 @@ object AmberBridge {
      * Feeds the result to the suspended [launch] caller.
      */
     fun handleResult(result: ActivityResult) {
-        resultChannel?.trySend(result)
-        resultChannel = null
+        currentChannel?.trySend(result)
+        currentChannel = null
     }
 }

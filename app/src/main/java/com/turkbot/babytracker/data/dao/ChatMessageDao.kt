@@ -24,6 +24,9 @@ interface ChatMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(msg: ChatMessage)
 
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE id = :id")
+    suspend fun exists(id: String): Int
+
     @Query("UPDATE chat_messages SET read = 1 WHERE id = :id")
     suspend fun markRead(id: String)
 
