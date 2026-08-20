@@ -38,6 +38,7 @@ import java.util.Locale
 
 private val FEED_TYPES = listOf("bottle" to "Bottle", "breast" to "Breast", "solids" to "Solids")
 private val BOTTLE_UNITS = listOf("ml" to "ml", "fl_oz" to "fl oz")
+private val SOLID_UNITS = listOf("g" to "g", "oz" to "oz")
 private val BREAST_SIDES = listOf("left", "right", "both")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +50,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
     var amountText by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     var selectedUnit by remember { mutableStateOf(UnitPreferences.defaultFeedUnit(context)) }
+    var selectedSolidUnit by remember { mutableStateOf(UnitPreferences.defaultSolidUnit(context)) }
     var selectedSide by remember { mutableStateOf("left") }
     var durationText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
@@ -154,14 +156,29 @@ fun FeedScreen(viewModel: BabyViewModel) {
                         }
 
                         "solids" -> {
-                            OutlinedTextField(
-                                value = amountText,
-                                onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                                label = { Text("Amount (g)") },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth()
-                            )
+                            ) {
+                                OutlinedTextField(
+                                    value = amountText,
+                                    onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
+                                    label = { Text("Amount") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                SingleChoiceSegmentedButtonRow {
+                                    SOLID_UNITS.forEachIndexed { i, (unit, label) ->
+                                        SegmentedButton(
+                                            selected = selectedSolidUnit == unit,
+                                            onClick = { selectedSolidUnit = unit },
+                                            shape = SegmentedButtonDefaults.itemShape(i, SOLID_UNITS.size)
+                                        ) { Text(label) }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -179,7 +196,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                             val duration = durationText.toIntOrNull()
                             val unit = when (selectedType) {
                                 "bottle" -> selectedUnit
-                                "solids" -> "g"
+                                "solids" -> selectedSolidUnit
                                 else -> null
                             }
                             viewModel.addFeeding(

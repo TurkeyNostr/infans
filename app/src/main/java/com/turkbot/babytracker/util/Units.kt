@@ -40,6 +40,7 @@ object Units {
         "fl_oz" -> "${"%.1f".format(amount)} fl oz"
         "min" -> "${amount.toInt()} min"
         "g" -> "${amount.toInt()} g"
+        "oz" -> "${"%.1f".format(amount)} oz"
         else -> amount.toString()
     }
 

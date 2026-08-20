@@ -44,6 +44,9 @@ object UnitPreferences {
     fun defaultFeedUnit(context: Context): String =
         if (getSystem(context) == System.IMPERIAL) "fl_oz" else "ml"
 
+    fun defaultSolidUnit(context: Context): String =
+        if (getSystem(context) == System.IMPERIAL) "oz" else "g"
+
     fun defaultPumpUnit(context: Context): String =
         if (getSystem(context) == System.IMPERIAL) "fl_oz" else "ml"
 
