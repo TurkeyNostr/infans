@@ -89,6 +89,10 @@ class NostrManager(context: Context) {
     private val _relayConnected = MutableStateFlow(false)
     val relayConnected: StateFlow<Boolean> = _relayConnected
 
+    /** Current user's own NIP-05, fetched from kind 0 metadata after login. */
+    private val _myNip05 = MutableStateFlow<String?>(null)
+    val myNip05: StateFlow<String?> = _myNip05
+
     /** Per-relay connection states (url → state) for the relay checker UI. */
     fun relayStates(): List<Pair<String, RelayState>> = relayPool.relayStates()
 
@@ -158,6 +162,7 @@ class NostrManager(context: Context) {
                     connectAndSubscribe(signer)
                     // Refresh NIP-65 relays in background (user may have changed them)
                     scope.launch { fetchAndApplyNip65Relays(signer.pubkeyHex) }
+                    scope.launch { refreshMyNip05() }
                 }
             }
             SignerMode.AMBER -> {
@@ -171,6 +176,7 @@ class NostrManager(context: Context) {
                         connectAndSubscribe(signer)
                         // Refresh NIP-65 relays in background
                         scope.launch { fetchAndApplyNip65Relays(signer.pubkeyHex) }
+                        scope.launch { refreshMyNip05() }
                     }
                 }
             }
@@ -188,6 +194,7 @@ class NostrManager(context: Context) {
         _signer.value = signer
         connectAndSubscribe(signer)
         scope.launch { fetchAndApplyNip65Relays(signer.pubkeyHex) }
+        scope.launch { refreshMyNip05() }
         return newKeys
     }
 
@@ -203,6 +210,7 @@ class NostrManager(context: Context) {
             _signer.value = signer
             connectAndSubscribe(signer)
             scope.launch { fetchAndApplyNip65Relays(signer.pubkeyHex) }
+            scope.launch { refreshMyNip05() }
             keys
         } catch (e: Exception) {
             Log.e(TAG, "Failed to import nsec", e)
@@ -236,6 +244,7 @@ class NostrManager(context: Context) {
             _signer.value = signer
             connectAndSubscribe(signer)
             scope.launch { fetchAndApplyNip65Relays(loginResult.pubkeyHex) }
+            scope.launch { refreshMyNip05() }
             loginResult.npub
         } catch (e: Exception) {
             Log.e(TAG, "External signer login failed", e)
@@ -321,6 +330,16 @@ class NostrManager(context: Context) {
             keyStore.savePartnerNip05(nip05)
             _partnerNip05.value = nip05
             Log.d(TAG, "Partner NIP-05: $nip05")
+        }
+    }
+
+    /** Fetch and cache our own NIP-05 from kind 0 metadata. */
+    suspend fun refreshMyNip05() {
+        val signerVal = _signer.value ?: return
+        val nip05 = nip05Resolver.fetchNip05(signerVal.pubkeyHex)
+        if (nip05 != null) {
+            _myNip05.value = nip05
+            Log.d(TAG, "My NIP-05: $nip05")
         }
     }
 

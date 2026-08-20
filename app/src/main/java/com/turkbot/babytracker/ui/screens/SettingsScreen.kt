@@ -143,13 +143,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (signer != null) {
+                        val myNip05 by nostrManager.myNip05.collectAsState()
                         Text(
-                            "Your npub",
+                            if (myNip05 != null) "Your NIP-05" else "Your npub",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text(signer!!.npub, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            myNip05 ?: signer!!.npub,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                         Spacer(Modifier.height(12.dp))
                         AssistChip(
                             onClick = {},
@@ -164,7 +168,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "Share this npub with the other parent so they can send you messages.",
+                            "Share this ${if (myNip05 != null) "NIP-05" else "npub"} with the other parent so they can send you messages.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
