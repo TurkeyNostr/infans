@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Milestone
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,7 +39,9 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
     val milestones by viewModel.milestones.collectAsState()
     var title by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
+    var editingMilestone by remember { mutableStateOf<Milestone?>(null) }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -115,9 +119,22 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
             items(milestones, key = { it.id }) { milestone ->
                 MilestoneCard(
                     milestone = milestone,
-                    onDelete = { viewModel.deleteMilestone(milestone.id) }
+                    onDelete = { viewModel.deleteMilestone(milestone.id) },
+                    onEditTime = { editingMilestone = milestone }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingMilestone?.let { milestone ->
+            EditTimestampDialog(
+                initialEpochMillis = milestone.date,
+                onDismiss = { editingMilestone = null },
+                onSave = { newTime ->
+                    viewModel.updateMilestoneDate(milestone.id, newTime)
+                    editingMilestone = null
+                }
+            )
         }
     }
 }
@@ -125,7 +142,8 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
 @Composable
 private fun MilestoneCard(
     milestone: Milestone,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     val formattedDate = remember(milestone.date) {
@@ -170,12 +188,21 @@ private fun MilestoneCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete milestone",
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit date",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete milestone",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
             }
         }
     }

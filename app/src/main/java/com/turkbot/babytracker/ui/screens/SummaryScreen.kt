@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Restaurant
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.*
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
@@ -73,6 +75,8 @@ fun SummaryScreen(
     val healthRecords by viewModel.healthRecords.collectAsState()
     val child by viewModel.activeChild.collectAsState()
     val children by viewModel.children.collectAsState()
+    var editingFeeding by remember { mutableStateOf<Feeding?>(null) }
+    var editingSleep by remember { mutableStateOf<Sleep?>(null) }
 
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -419,7 +423,8 @@ fun SummaryScreen(
                     title = Units.feedTypeLabel(f.type),
                     subtitle = "${timeFmt.format(Date(f.time))}" +
                         (if (f.amount != null && f.unit != null) " · ${Units.fmtAmount(f.amount, f.unit)}" else ""),
-                    onDelete = { viewModel.deleteFeeding(f.id) }
+                    onDelete = { viewModel.deleteFeeding(f.id) },
+                    onEditTime = { editingFeeding = f }
                 )
             }
             items(todaySleeps) { s ->
@@ -427,10 +432,33 @@ fun SummaryScreen(
                     icon = Icons.Default.Bedtime,
                     title = "Sleep · ${Units.fmtDuration(s.duration)}",
                     subtitle = timeFmt.format(Date(s.start)),
-                    onDelete = { viewModel.deleteSleep(s.id) }
+                    onDelete = { viewModel.deleteSleep(s.id) },
+                    onEditTime = { editingSleep = s }
                 )
             }
         }
+    }
+
+    // ── Edit timestamp dialogs ──────────────────────────
+    editingFeeding?.let { feeding ->
+        EditTimestampDialog(
+            initialEpochMillis = feeding.time,
+            onDismiss = { editingFeeding = null },
+            onSave = { newTime ->
+                viewModel.updateFeedingTime(feeding.id, newTime)
+                editingFeeding = null
+            }
+        )
+    }
+    editingSleep?.let { sleep ->
+        EditTimestampDialog(
+            initialEpochMillis = sleep.start,
+            onDismiss = { editingSleep = null },
+            onSave = { newTime ->
+                viewModel.updateSleepStart(sleep.id, newTime)
+                editingSleep = null
+            }
+        )
     }
 }
 
@@ -543,7 +571,8 @@ private fun ActivityRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -565,6 +594,11 @@ private fun ActivityRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (onEditTime != null) {
+                IconButton(onClick = onEditTime) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit time", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant)

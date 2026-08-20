@@ -27,6 +27,9 @@ interface SleepDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(sleep: Sleep)
 
+    @Query("UPDATE sleeps SET start = :start WHERE id = :id")
+    suspend fun updateStart(id: String, start: Long)
+
     @Query("DELETE FROM sleeps WHERE id = :id")
     suspend fun delete(id: String)
 

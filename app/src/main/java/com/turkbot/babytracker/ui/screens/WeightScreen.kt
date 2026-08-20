@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Weight
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
@@ -46,10 +48,12 @@ fun WeightScreen(viewModel: BabyViewModel) {
     var heightUnit by remember { mutableStateOf(UnitPreferences.defaultHeightUnit(context)) }
     var headCircInput by remember { mutableStateOf("") }
     var headCircUnit by remember { mutableStateOf(UnitPreferences.defaultHeightUnit(context)) }
+    var editingWeight by remember { mutableStateOf<Weight?>(null) }
 
     val weightUnits = listOf("kg", "lb", "oz")
     val heightUnits = listOf("cm", "in")
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -182,9 +186,22 @@ fun WeightScreen(viewModel: BabyViewModel) {
             items(weights, key = { it.id }) { weight ->
                 WeightCard(
                     weight = weight,
-                    onDelete = { viewModel.deleteWeight(weight.id) }
+                    onDelete = { viewModel.deleteWeight(weight.id) },
+                    onEditTime = { editingWeight = weight }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingWeight?.let { weight ->
+            EditTimestampDialog(
+                initialEpochMillis = weight.date,
+                onDismiss = { editingWeight = null },
+                onSave = { newTime ->
+                    viewModel.updateWeightDate(weight.id, newTime)
+                    editingWeight = null
+                }
+            )
         }
     }
 }
@@ -192,7 +209,8 @@ fun WeightScreen(viewModel: BabyViewModel) {
 @Composable
 private fun WeightCard(
     weight: Weight,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     val formattedDate = remember(weight.date) {
@@ -242,12 +260,21 @@ private fun WeightCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete weight measurement",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit date",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete weight measurement",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

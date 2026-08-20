@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Sleep
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
@@ -48,6 +50,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
     var hoursText by remember { mutableStateOf("") }
     var minutesText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
+    var editingSleep by remember { mutableStateOf<Sleep?>(null) }
 
     fun parseStartToEpoch(timeStr: String): Long {
         val today = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
@@ -61,6 +64,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -172,9 +176,22 @@ fun SleepScreen(viewModel: BabyViewModel) {
                 SleepCard(
                     sleep = sleep,
                     timeFormat = timeFormat,
-                    onDelete = { viewModel.deleteSleep(sleep.id) }
+                    onDelete = { viewModel.deleteSleep(sleep.id) },
+                    onEditTime = { editingSleep = sleep }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingSleep?.let { sleep ->
+            EditTimestampDialog(
+                initialEpochMillis = sleep.start,
+                onDismiss = { editingSleep = null },
+                onSave = { newTime ->
+                    viewModel.updateSleepStart(sleep.id, newTime)
+                    editingSleep = null
+                }
+            )
         }
     }
 }
@@ -183,7 +200,8 @@ fun SleepScreen(viewModel: BabyViewModel) {
 private fun SleepCard(
     sleep: Sleep,
     timeFormat: SimpleDateFormat,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -215,12 +233,21 @@ private fun SleepCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete sleep session",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete sleep session",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

@@ -24,6 +24,9 @@ interface MilestoneDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(milestone: Milestone)
 
+    @Query("UPDATE milestones SET date = :date WHERE id = :id")
+    suspend fun updateDate(id: String, date: Long)
+
     @Query("DELETE FROM milestones WHERE id = :id")
     suspend fun delete(id: String)
 

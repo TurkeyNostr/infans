@@ -27,6 +27,9 @@ interface WeightDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(weight: Weight)
 
+    @Query("UPDATE weights SET date = :date WHERE id = :id")
+    suspend fun updateDate(id: String, date: Long)
+
     @Query("DELETE FROM weights WHERE id = :id")
     suspend fun delete(id: String)
 

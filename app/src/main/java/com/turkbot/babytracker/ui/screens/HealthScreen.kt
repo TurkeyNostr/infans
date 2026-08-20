@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.HealthRecord
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -44,6 +46,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     var doseText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
+    var editingRecord by remember { mutableStateOf<HealthRecord?>(null) }
 
     val todayRecords = remember(healthRecords) {
         val cal = Calendar.getInstance()
@@ -55,6 +58,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         healthRecords.filter { it.time >= startOfDay }.sortedByDescending { it.time }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -189,9 +193,22 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayRecords, key = { it.id }) { record ->
                 HealthRecordCard(
                     record = record,
-                    onDelete = { viewModel.deleteHealthRecord(record.id) }
+                    onDelete = { viewModel.deleteHealthRecord(record.id) },
+                    onEditTime = { editingRecord = record }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingRecord?.let { record ->
+            EditTimestampDialog(
+                initialEpochMillis = record.time,
+                onDismiss = { editingRecord = null },
+                onSave = { newTime ->
+                    viewModel.updateHealthRecordTime(record.id, newTime)
+                    editingRecord = null
+                }
+            )
         }
     }
 }
@@ -199,7 +216,8 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun HealthRecordCard(
     record: HealthRecord,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val feverThreshold = 38.0
@@ -256,12 +274,21 @@ private fun HealthRecordCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

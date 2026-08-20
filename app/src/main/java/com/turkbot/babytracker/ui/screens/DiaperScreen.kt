@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Diaper
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -70,6 +72,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     var selectedColor by remember { mutableStateOf("yellow") }
     var colorExpanded by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
+    var editingDiaper by remember { mutableStateOf<Diaper?>(null) }
 
     val todayDiapers = remember(diapers) {
         val cal = Calendar.getInstance()
@@ -81,6 +84,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         diapers.filter { it.time >= startOfDay }.sortedByDescending { it.time }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -219,9 +223,22 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayDiapers, key = { it.id }) { diaper ->
                 DiaperCard(
                     diaper = diaper,
-                    onDelete = { viewModel.deleteDiaper(diaper.id) }
+                    onDelete = { viewModel.deleteDiaper(diaper.id) },
+                    onEditTime = { editingDiaper = diaper }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingDiaper?.let { diaper ->
+            EditTimestampDialog(
+                initialEpochMillis = diaper.time,
+                onDismiss = { editingDiaper = null },
+                onSave = { newTime ->
+                    viewModel.updateDiaperTime(diaper.id, newTime)
+                    editingDiaper = null
+                }
+            )
         }
     }
 }
@@ -229,7 +246,8 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun DiaperCard(
     diaper: Diaper,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
@@ -271,12 +289,21 @@ private fun DiaperCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

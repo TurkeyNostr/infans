@@ -27,6 +27,9 @@ interface FeedingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(feeding: Feeding)
 
+    @Query("UPDATE feedings SET time = :time WHERE id = :id")
+    suspend fun updateTime(id: String, time: Long)
+
     @Query("DELETE FROM feedings WHERE id = :id")
     suspend fun delete(id: String)
 

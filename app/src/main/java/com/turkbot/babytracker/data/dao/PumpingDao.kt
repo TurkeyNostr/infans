@@ -24,6 +24,9 @@ interface PumpingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(pumping: Pumping)
 
+    @Query("UPDATE pumpings SET time = :time WHERE id = :id")
+    suspend fun updateTime(id: String, time: Long)
+
     @Query("DELETE FROM pumpings WHERE id = :id")
     suspend fun delete(id: String)
 

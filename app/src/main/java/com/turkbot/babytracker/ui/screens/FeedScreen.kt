@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Feeding
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
@@ -56,6 +58,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
     var noteText by remember { mutableStateOf("") }
     var saveError by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    var editingFeeding by remember { mutableStateOf<Feeding?>(null) }
 
     LaunchedEffect(saveError) {
         saveError?.let {
@@ -266,11 +269,23 @@ fun FeedScreen(viewModel: BabyViewModel) {
             items(todayFeedings, key = { it.id }) { feeding ->
                 FeedingCard(
                     feeding = feeding,
-                    onDelete = { viewModel.deleteFeeding(feeding.id) }
+                    onDelete = { viewModel.deleteFeeding(feeding.id) },
+                    onEditTime = { editingFeeding = feeding }
                 )
             }
         }
     }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingFeeding?.let { feeding ->
+            EditTimestampDialog(
+                initialEpochMillis = feeding.time,
+                onDismiss = { editingFeeding = null },
+                onSave = { newTime ->
+                    viewModel.updateFeedingTime(feeding.id, newTime)
+                    editingFeeding = null
+                }
+            )
+        }
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -281,7 +296,8 @@ fun FeedScreen(viewModel: BabyViewModel) {
 @Composable
 private fun FeedingCard(
     feeding: Feeding,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val displayAmount = when (feeding.type) {
@@ -335,12 +351,21 @@ private fun FeedingCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

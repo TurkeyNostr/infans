@@ -13,3 +13,6 @@
 
 # Keep Room entities
 -keep class com.turkbot.babytracker.data.entities.** { *; }
+
+# Suppress R8 missing-class errors for annotations only needed at compile time
+-dontwarn com.google.errorprone.annotations.**

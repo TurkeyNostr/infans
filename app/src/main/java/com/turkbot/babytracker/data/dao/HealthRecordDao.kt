@@ -24,6 +24,9 @@ interface HealthRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: HealthRecord)
 
+    @Query("UPDATE health_records SET time = :time WHERE id = :id")
+    suspend fun updateTime(id: String, time: Long)
+
     @Query("DELETE FROM health_records WHERE id = :id")
     suspend fun delete(id: String)
 

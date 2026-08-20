@@ -45,12 +45,14 @@ class BabyRepository(context: Context) {
     // ── Feedings ──────────────────────────────────────
     fun feedings(childId: String): Flow<List<Feeding>> = feedingDao.getByChild(childId)
     suspend fun saveFeeding(f: Feeding) = feedingDao.insert(f)
+    suspend fun updateFeedingTime(id: String, time: Long) = feedingDao.updateTime(id, time)
     suspend fun deleteFeeding(id: String) = feedingDao.delete(id)
     suspend fun allFeedings(): List<Feeding> = feedingDao.getAll()
 
     // ── Sleep ─────────────────────────────────────────
     fun sleeps(childId: String): Flow<List<Sleep>> = sleepDao.getByChild(childId)
     suspend fun saveSleep(s: Sleep) = sleepDao.insert(s)
+    suspend fun updateSleepStart(id: String, start: Long) = sleepDao.updateStart(id, start)
     suspend fun deleteSleep(id: String) = sleepDao.delete(id)
     suspend fun allSleeps(): List<Sleep> = sleepDao.getAll()
 
@@ -58,12 +60,14 @@ class BabyRepository(context: Context) {
     fun weights(childId: String): Flow<List<Weight>> = weightDao.getByChild(childId)
     suspend fun allWeights(childId: String): List<Weight> = weightDao.getAllByChild(childId)
     suspend fun saveWeight(w: Weight) = weightDao.insert(w)
+    suspend fun updateWeightDate(id: String, date: Long) = weightDao.updateDate(id, date)
     suspend fun deleteWeight(id: String) = weightDao.delete(id)
     suspend fun allWeights(): List<Weight> = weightDao.getAll()
 
     // ── Milestones ────────────────────────────────────
     fun milestones(childId: String): Flow<List<Milestone>> = milestoneDao.getByChild(childId)
     suspend fun saveMilestone(m: Milestone) = milestoneDao.insert(m)
+    suspend fun updateMilestoneDate(id: String, date: Long) = milestoneDao.updateDate(id, date)
     suspend fun deleteMilestone(id: String) = milestoneDao.delete(id)
     suspend fun allMilestones(): List<Milestone> = milestoneDao.getAll()
 
@@ -77,18 +81,21 @@ class BabyRepository(context: Context) {
     // ── Diapers ──────────────────────────────────────
     fun diapers(childId: String): Flow<List<Diaper>> = diaperDao.getByChild(childId)
     suspend fun saveDiaper(d: Diaper) = diaperDao.insert(d)
+    suspend fun updateDiaperTime(id: String, time: Long) = diaperDao.updateTime(id, time)
     suspend fun deleteDiaper(id: String) = diaperDao.delete(id)
     suspend fun allDiapers(): List<Diaper> = diaperDao.getAll()
 
     // ── Pumping ───────────────────────────────────────
     fun pumpings(childId: String): Flow<List<Pumping>> = pumpingDao.getByChild(childId)
     suspend fun savePumping(p: Pumping) = pumpingDao.insert(p)
+    suspend fun updatePumpingTime(id: String, time: Long) = pumpingDao.updateTime(id, time)
     suspend fun deletePumping(id: String) = pumpingDao.delete(id)
     suspend fun allPumpings(): List<Pumping> = pumpingDao.getAll()
 
     // ── Health records ────────────────────────────────
     fun healthRecords(childId: String): Flow<List<HealthRecord>> = healthRecordDao.getByChild(childId)
     suspend fun saveHealthRecord(r: HealthRecord) = healthRecordDao.insert(r)
+    suspend fun updateHealthRecordTime(id: String, time: Long) = healthRecordDao.updateTime(id, time)
     suspend fun deleteHealthRecord(id: String) = healthRecordDao.delete(id)
     suspend fun allHealthRecords(): List<HealthRecord> = healthRecordDao.getAll()
 

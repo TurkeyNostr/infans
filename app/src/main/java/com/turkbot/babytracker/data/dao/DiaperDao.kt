@@ -24,6 +24,9 @@ interface DiaperDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(diaper: Diaper)
 
+    @Query("UPDATE diapers SET time = :time WHERE id = :id")
+    suspend fun updateTime(id: String, time: Long)
+
     @Query("DELETE FROM diapers WHERE id = :id")
     suspend fun delete(id: String)
 

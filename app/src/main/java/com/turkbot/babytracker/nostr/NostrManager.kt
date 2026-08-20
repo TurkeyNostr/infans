@@ -303,15 +303,16 @@ class NostrManager(context: Context) {
                     // Re-subscribe with full history (no since) so we fetch all partner data
                     val myPubkeyHex = _signer.value?.pubkeyHex
                     if (myPubkeyHex != null) {
+                        val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
                         relayPool.subscribe(
                             SUB_PARTNER_SYNC + "_author",
-                            """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                            """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                         )
                         // Also re-subscribe the #p filter in case the relay indexes p-tags
                         relayPool.unsubscribe(SUB_PARTNER_SYNC)
                         relayPool.subscribe(
                             SUB_PARTNER_SYNC,
-                            """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
+                            """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                         )
                     }
                 }
@@ -422,49 +423,53 @@ class NostrManager(context: Context) {
 
         // Subscribe to gift-wrapped DMs (kind 1059) addressed to us.
         // Use 'since' to only fetch new DMs since last launch — avoids re-decrypting
-        // 100 historical DMs (each triggering 2 Amber prompts) on every reconnect.
+        // historical DMs (each triggering 2 Amber prompts) on every reconnect.
+        // Limit 20: each DM requires 2 sequential Amber nip44_decrypt calls (gift
+        // wrap → seal → rumor), so 20 DMs = 40 prompts max on first launch.
         val lastDmTime = keyStore.getLastDmTime()
         val dmFilter = if (lastDmTime > 0) {
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"since":$lastDmTime,"limit":100}"""
+            """{"kinds":[1059],"#p":["$myPubkeyHex"],"since":$lastDmTime,"limit":20}"""
         } else {
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
+            """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":20}"""
         }
         relayPool.subscribe(SUB_DMS, dmFilter)
         Dbg.info(Cat.RELAY, "Subscribed to DMs (since=${if (lastDmTime > 0) lastDmTime else "start"})")
 
-        // Subscribe to our own encrypted backups (kind 30078 authored by us).
-        // We don't filter by #d tag because some relays don't support combining
-        // authors + tag filters. We filter by d-tag client-side instead.
+        // Subscribe to our own encrypted backups (kind 30078 authored by us,
+        // d-tag = "baby-tracker-backup"). Filtering by #d server-side avoids
+        // pulling down our partner-sync events and other unrelated 30078s.
         // Use 'since' to avoid re-processing old backups on every reconnect.
         val lastBackupTime = keyStore.getLastBackupTime()
+        val backupDTag = BackupService.BACKUP_D_TAG
         val backupFilter = if (lastBackupTime > 0) {
-            """{"kinds":[30078],"authors":["$myPubkeyHex"],"since":$lastBackupTime,"limit":10}"""
+            """{"kinds":[30078],"authors":["$myPubkeyHex"],"#d":["$backupDTag"],"since":$lastBackupTime,"limit":10}"""
         } else {
-            """{"kinds":[30078],"authors":["$myPubkeyHex"],"limit":10}"""
+            """{"kinds":[30078],"authors":["$myPubkeyHex"],"#d":["$backupDTag"],"limit":10}"""
         }
         relayPool.subscribe(SUB_BACKUP, backupFilter)
 
-        // Subscribe to partner sync events (kind 30078 where #p = our pubkey).
-        // We don't filter by #d tag here because many relays don't support querying
-        // by multiple different tag types simultaneously. Instead we fetch all
-        // kind 30078 events that p-tag us and filter by d-tag client-side.
+        // Subscribe to partner sync events (kind 30078 where #p = our pubkey,
+        // d-tag = "baby-tracker-sync"). Filtering by #d server-side avoids
+        // pulling down unrelated 30078 events that happen to p-tag us.
+        val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
         val partnerSyncFilter = if (lastBackupTime > 0) {
-            """{"kinds":[30078],"#p":["$myPubkeyHex"],"since":$lastBackupTime,"limit":10}"""
+            """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
         } else {
-            """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
+            """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
         }
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
 
-        // Also subscribe to ALL kind 30078 events authored by our partner, in case
-        // the relay doesn't index #p tags on kind 30078. We filter client-side.
+        // Also subscribe to partner-sync events authored by our partner, in case
+        // the relay doesn't index #p tags on kind 30078. Filter by #d so we only
+        // get their partner-sync events, not their self-backups.
         val partnerNpubVal = _partnerNpub.value
         if (partnerNpubVal != null) {
             val partnerHex = npubToHex(partnerNpubVal)
             if (partnerHex != null) {
                 val partnerAuthorFilter = if (lastBackupTime > 0) {
-                    """{"kinds":[30078],"authors":["$partnerHex"],"since":$lastBackupTime,"limit":10}"""
+                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
                 } else {
-                    """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                 }
                 relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
             }
@@ -492,10 +497,11 @@ class NostrManager(context: Context) {
                 val partnerHex = npubToHex(partnerNpubVal)
                 if (partnerHex != null) {
                     val lastBackupTime = keyStore.getLastBackupTime()
+                    val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
                     val partnerAuthorFilter = if (lastBackupTime > 0) {
-                        """{"kinds":[30078],"authors":["$partnerHex"],"since":$lastBackupTime,"limit":10}"""
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
                     } else {
-                        """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                     }
                     relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
                 }
@@ -716,6 +722,8 @@ class NostrManager(context: Context) {
     /**
      * Decrypt and restore a backup event.
      * Only processes events with d-tag = BACKUP_D_TAG (our self-backup).
+     * The relay subscription already filters by #d, but we check client-side
+     * as a safety net in case a relay doesn't honour the #d filter.
      */
     private suspend fun handleBackupEvent(event: RelayEvent, signer: NostrSigner) {
         val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
@@ -757,12 +765,12 @@ class NostrManager(context: Context) {
      * before decrypting, preventing arbitrary relay-injected data merges.
      */
     private suspend fun handlePartnerSyncEvent(event: RelayEvent, signer: NostrSigner) {
-        // Check the d-tag client-side — we couldn't filter by it in the relay
-        // subscription because many relays don't support multi-tag queries.
+        // Check the d-tag client-side as a safety net — the relay subscription
+        // already filters by #d, but relays may not honour it in all cases.
         val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
         if (dTag != BackupService.PARTNER_SYNC_D_TAG) {
-            Log.d(TAG, "Kind 30078 p-tagged us but d-tag is '$dTag' (not partner sync) — ignoring")
-            Dbg.info(Cat.SYNC, "Kind 30078 p-tagged us but d-tag not partner-sync — ignoring")
+            Log.d(TAG, "Kind 30078 (partner sync sub) but d-tag is '$dTag' — ignoring")
+            Dbg.info(Cat.SYNC, "Kind 30078 partner-sync sub but wrong d-tag — ignoring")
             return
         }
 

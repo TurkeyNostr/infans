@@ -144,6 +144,13 @@ class BabyViewModel(
         }
     }
 
+    fun updateFeedingTime(id: String, time: Long) {
+        viewModelScope.launch {
+            repo.updateFeedingTime(id, time)
+            nostr.exportBackup()
+        }
+    }
+
     // ── Sleep ─────────────────────────────────────────
     fun addSleep(start: Long, duration: Int, note: String?) {
         val child = activeChild.value ?: return
@@ -162,6 +169,13 @@ class BabyViewModel(
     fun deleteSleep(id: String) {
         viewModelScope.launch {
             repo.deleteSleep(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateSleepStart(id: String, start: Long) {
+        viewModelScope.launch {
+            repo.updateSleepStart(id, start)
             nostr.exportBackup()
         }
     }
@@ -192,6 +206,13 @@ class BabyViewModel(
         }
     }
 
+    fun updateWeightDate(id: String, date: Long) {
+        viewModelScope.launch {
+            repo.updateWeightDate(id, date)
+            nostr.exportBackup()
+        }
+    }
+
     // ── Milestones ────────────────────────────────────
     fun addMilestone(title: String, note: String?) {
         val child = activeChild.value ?: return
@@ -210,6 +231,13 @@ class BabyViewModel(
     fun deleteMilestone(id: String) {
         viewModelScope.launch {
             repo.deleteMilestone(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateMilestoneDate(id: String, date: Long) {
+        viewModelScope.launch {
+            repo.updateMilestoneDate(id, date)
             nostr.exportBackup()
         }
     }
@@ -233,6 +261,13 @@ class BabyViewModel(
     fun deleteDiaper(id: String) {
         viewModelScope.launch {
             repo.deleteDiaper(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateDiaperTime(id: String, time: Long) {
+        viewModelScope.launch {
+            repo.updateDiaperTime(id, time)
             nostr.exportBackup()
         }
     }
@@ -262,6 +297,13 @@ class BabyViewModel(
         }
     }
 
+    fun updatePumpingTime(id: String, time: Long) {
+        viewModelScope.launch {
+            repo.updatePumpingTime(id, time)
+            nostr.exportBackup()
+        }
+    }
+
     // ── Health records ────────────────────────────────
     fun addHealthRecord(temperature: Double?, medication: String?, dose: String?, note: String?) {
         val child = activeChild.value ?: return
@@ -282,6 +324,13 @@ class BabyViewModel(
     fun deleteHealthRecord(id: String) {
         viewModelScope.launch {
             repo.deleteHealthRecord(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateHealthRecordTime(id: String, time: Long) {
+        viewModelScope.launch {
+            repo.updateHealthRecordTime(id, time)
             nostr.exportBackup()
         }
     }

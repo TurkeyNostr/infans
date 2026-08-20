@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Pumping
+import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
@@ -50,6 +52,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     var selectedSide by remember { mutableStateOf("left") }
     var durationText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
+    var editingPumping by remember { mutableStateOf<Pumping?>(null) }
 
     val todayPumpings = remember(pumpings) {
         val cal = Calendar.getInstance()
@@ -61,6 +64,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         pumpings.filter { it.time >= startOfDay }.sortedByDescending { it.time }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -204,9 +208,22 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayPumpings, key = { it.id }) { pumping ->
                 PumpingCard(
                     pumping = pumping,
-                    onDelete = { viewModel.deletePumping(pumping.id) }
+                    onDelete = { viewModel.deletePumping(pumping.id) },
+                    onEditTime = { editingPumping = pumping }
                 )
             }
+        }
+    }
+        // ── Edit timestamp dialog ──────────────────────────
+        editingPumping?.let { pumping ->
+            EditTimestampDialog(
+                initialEpochMillis = pumping.time,
+                onDismiss = { editingPumping = null },
+                onSave = { newTime ->
+                    viewModel.updatePumpingTime(pumping.id, newTime)
+                    editingPumping = null
+                }
+            )
         }
     }
 }
@@ -214,7 +231,8 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun PumpingCard(
     pumping: Pumping,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditTime: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
@@ -268,12 +286,21 @@ private fun PumpingCard(
                     )
                 }
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditTime) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
