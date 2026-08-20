@@ -15,6 +15,8 @@ package com.turkbot.babytracker.nostr
 import android.content.Context
 import android.util.Log
 import com.turkbot.babytracker.data.entities.ChatMessage
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.data.repo.BackupPayload
 import com.turkbot.babytracker.nostr.amber.AmberSigner
@@ -138,6 +140,10 @@ class NostrManager(context: Context) {
     val partnerNip05: StateFlow<String?> = _partnerNip05
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** Event IDs currently being decrypted — prevents the same event from
+     *  triggering multiple Amber prompts when 3 relays each return it. */
+    private val inflightEvents = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     companion object {
         private const val TAG = "NostrManager"
@@ -285,8 +291,31 @@ class NostrManager(context: Context) {
         _partnerNip05.value = null
         if (trimmed != null) {
             Log.d(TAG, "Partner npub set: ${trimmed.take(20)}...")
-            // Clear processed-events cache so we re-fetch partner data fresh
+            // Clear processed-events cache and timestamps so we re-fetch partner data fresh
             keyStore.clearProcessedEvents()
+            // Re-subscribe to partner events immediately with no 'since' filter
+            // (clearProcessedEvents reset lastBackupTime to 0)
+            scope.launch {
+                val partnerHex = npubToHex(trimmed)
+                if (partnerHex != null) {
+                    // Unsubscribe old partner-author sub if it exists
+                    relayPool.unsubscribe(SUB_PARTNER_SYNC + "_author")
+                    // Re-subscribe with full history (no since) so we fetch all partner data
+                    val myPubkeyHex = _signer.value?.pubkeyHex
+                    if (myPubkeyHex != null) {
+                        relayPool.subscribe(
+                            SUB_PARTNER_SYNC + "_author",
+                            """{"kinds":[30078],"authors":["$partnerHex"],"limit":10}"""
+                        )
+                        // Also re-subscribe the #p filter in case the relay indexes p-tags
+                        relayPool.unsubscribe(SUB_PARTNER_SYNC)
+                        relayPool.subscribe(
+                            SUB_PARTNER_SYNC,
+                            """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":10}"""
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -362,6 +391,7 @@ class NostrManager(context: Context) {
         // Start the event collector BEFORE connecting/subscribing so we don't
         // miss any events that arrive immediately after subscription.
         val myPubkeyHex = signer.pubkeyHex
+        Dbg.info(Cat.RELAY, "Connecting to relays and starting subscriptions")
 
         scope.launch {
             relayPool.events.collect { wrapper ->
@@ -382,6 +412,7 @@ class NostrManager(context: Context) {
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error handling relay event kind=${wrapper.event.kind}", e)
+                Dbg.exception(Cat.GENERAL, "Error handling relay event kind=${wrapper.event.kind}", e)
                 }
             }
         }
@@ -399,6 +430,7 @@ class NostrManager(context: Context) {
             """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
         }
         relayPool.subscribe(SUB_DMS, dmFilter)
+        Dbg.info(Cat.RELAY, "Subscribed to DMs (since=${if (lastDmTime > 0) lastDmTime else "start"})")
 
         // Subscribe to our own encrypted backups (kind 30078 authored by us).
         // We don't filter by #d tag because some relays don't support combining
@@ -452,6 +484,7 @@ class NostrManager(context: Context) {
         val relays = fetchNip65Relays(pubkeyHex)
         if (relays.isNotEmpty()) {
             Log.d(TAG, "NIP-65: found ${relays.size} relays for user, applying")
+        Dbg.info(Cat.RELAY, "NIP-65: found ${relays.size} relays, merging with defaults")
             applyRelays(relays)
             // Re-subscribe partner sync on the new relays if partner is configured
             val partnerNpubVal = _partnerNpub.value
@@ -469,6 +502,7 @@ class NostrManager(context: Context) {
             }
         } else {
             Log.d(TAG, "NIP-65: no relay list found, keeping default relays")
+            Dbg.info(Cat.RELAY, "NIP-65: no relay list found, keeping default relays")
         }
     }
 
@@ -527,6 +561,7 @@ class NostrManager(context: Context) {
         relayPool.reconfigure(merged)
         (currentRelays as MutableStateFlow).value = merged
         Log.d(TAG, "Relays updated to: $merged (NIP-65 + defaults merged)")
+        Dbg.info(Cat.RELAY, "Relays reconfigured: ${merged.size} total (NIP-65 + defaults merged)")
     }
 
     /**
@@ -578,6 +613,52 @@ class NostrManager(context: Context) {
     }
 
     /**
+     * Check whether the configured partner has us configured back.
+     *
+     * Fetches the partner's latest kind-30078 event with d="baby-tracker-sync"
+     * and inspects its p-tags. If our pubkey is in the p-tags, they have us as
+     * partner. Returns a [PartnerStatus] result.
+     */
+    suspend fun checkPartnerStatus(): PartnerStatus {
+        val partnerNpubVal = _partnerNpub.value
+            ?: return PartnerStatus.NoPartner
+        val partnerHex = npubToHex(partnerNpubVal)
+            ?: return PartnerStatus.NoPartner
+        val myHex = _signer.value?.pubkeyHex
+            ?: return PartnerStatus.NoPartner
+
+        val dTag = BackupService.PARTNER_SYNC_D_TAG
+        val filter = """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$dTag"],"limit":1}"""
+        val subId = "partner_status_check"
+
+        var foundEvent: RelayEvent? = null
+        val job = scope.launch {
+            relayPool.events.collect { wrapper ->
+                if (wrapper.subscriptionId == subId) {
+                    foundEvent = wrapper.event
+                }
+            }
+        }
+
+        relayPool.subscribe(subId, filter)
+        kotlinx.coroutines.delay(5_000)
+        relayPool.unsubscribe(subId)
+        job.cancel()
+
+        val event = foundEvent
+            ?: return PartnerStatus.NoInfansData
+
+        // Check if our pubkey is in the p-tags
+        val pTags = event.tags
+            .filter { it.isNotEmpty() && it[0] == "p" }
+            .mapNotNull { it.getOrNull(1) }
+        val hasUs = pTags.contains(myHex)
+
+        return if (hasUs) PartnerStatus.Mutual
+        else PartnerStatus.HasDifferentPartner(pTags)
+    }
+
+    /**
      * Decrypt and store an incoming gift-wrapped DM.
      *
      * Skips messages already in the DB (by event ID) to avoid redundant Amber
@@ -588,41 +669,48 @@ class NostrManager(context: Context) {
         // Skip already-stored messages — avoids redundant Amber decrypt prompts
         if (repo.messageExists(event.id)) {
             Log.d(TAG, "DM ${event.id.take(12)} already stored — skipping")
+            Dbg.info(Cat.DM, "DM already stored — skipping decrypt")
             return
         }
-
-        // Get expected partner hex for early sender filtering. If partner is not
-        // configured, skip all DMs — no point decrypting messages we'll reject.
-        val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
-        if (expectedPartnerHex == null) {
-            Log.w(TAG, "DM received but no partner npub configured — ignoring")
+        // Prevent duplicate decrypts when 3 relays return the same event
+        if (!inflightEvents.add(event.id)) {
+            Log.d(TAG, "DM ${event.id.take(12)} already being decrypted — skipping")
+            Dbg.info(Cat.DM, "DM already being decrypted — skipping")
             return
         }
+        try {
+            // Get expected partner hex for early sender filtering. If partner is not
+            // configured, skip all DMs — no point decrypting messages we'll reject.
+            val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
+            if (expectedPartnerHex == null) {
+                Log.w(TAG, "DM received but no partner npub configured — ignoring")
+                Dbg.warn(Cat.DM, "DM received but no partner configured — ignoring")
+                return
+            }
 
-        // Unwrap with sender filter: only does the second (expensive) Amber decrypt
-        // if the seal's pubkey matches our partner. Non-partner DMs still require
-        // the first decrypt (sender identity is hidden inside the seal by NIP-17),
-        // but skip the second decrypt entirely.
-        val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
+            val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
 
-        // Double-check: unwrapGiftWrap already filtered, but verify for safety
-        if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
-            Log.w(TAG, "DM from non-partner pubkey — ignoring")
-            return
+            if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
+                Log.w(TAG, "DM from non-partner pubkey — ignoring")
+                Dbg.warn(Cat.DM, "DM from non-partner sender — ignoring")
+                return
+            }
+
+            val chatMsg = ChatMessage(
+                id = event.id,
+                senderPubkey = unwrapped.senderPubkeyHex,
+                senderNpub = unwrapped.senderNpub,
+                content = unwrapped.content,
+                createdAt = unwrapped.createdAt
+            )
+            repo.saveMessage(chatMsg)
+            Log.d(TAG, "Stored DM from partner")
+            Dbg.info(Cat.DM, "DM received from partner — stored")
+
+            keyStore.saveLastDmTime(event.createdAt)
+        } finally {
+            inflightEvents.remove(event.id)
         }
-
-        val chatMsg = ChatMessage(
-            id = event.id,
-            senderPubkey = unwrapped.senderPubkeyHex,
-            senderNpub = unwrapped.senderNpub,
-            content = unwrapped.content,
-            createdAt = unwrapped.createdAt
-        )
-        repo.saveMessage(chatMsg)
-        Log.d(TAG, "Stored DM from partner")
-
-        // Save timestamp so next launch only fetches newer DMs
-        keyStore.saveLastDmTime(event.createdAt)
     }
 
     /**
@@ -633,19 +721,32 @@ class NostrManager(context: Context) {
         val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
         if (dTag != BackupService.BACKUP_D_TAG) {
             Log.d(TAG, "Kind 30078 from us but d-tag is '$dTag' (not self-backup) — ignoring")
+            Dbg.info(Cat.SYNC, "Kind 30078 self-authored but d-tag not backup — ignoring")
             return
         }
         // Skip events we've already decrypted — every relay returns the same
         // event, and re-decrypting triggers a fresh Amber prompt each time.
         if (keyStore.isEventProcessed(event.id)) {
             Log.d(TAG, "Backup event ${event.id.take(12)}… already processed — skipping decrypt")
+            Dbg.info(Cat.SYNC, "Backup event already processed — skipping decrypt")
             return
         }
-        val payload = backupService.decryptBackup(event.content, signer) ?: return
-        keyStore.markEventProcessed(event.id)
-        keyStore.saveLastBackupTime(event.createdAt)
-        restoreFromPayload(payload)
-        Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
+        // Prevent duplicate decrypts when 3 relays return the same event
+        if (!inflightEvents.add(event.id)) {
+            Log.d(TAG, "Backup event ${event.id.take(12)}… already being decrypted — skipping")
+            Dbg.info(Cat.SYNC, "Backup event already being decrypted — skipping")
+            return
+        }
+        try {
+            val payload = backupService.decryptBackup(event.content, signer) ?: return
+            keyStore.markEventProcessed(event.id)
+            keyStore.saveLastBackupTime(event.createdAt)
+            restoreFromPayload(payload)
+            Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
+            Dbg.info(Cat.SYNC, "Backup restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
+        } finally {
+            inflightEvents.remove(event.id)
+        }
     }
 
     /**
@@ -661,6 +762,7 @@ class NostrManager(context: Context) {
         val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1)
         if (dTag != BackupService.PARTNER_SYNC_D_TAG) {
             Log.d(TAG, "Kind 30078 p-tagged us but d-tag is '$dTag' (not partner sync) — ignoring")
+            Dbg.info(Cat.SYNC, "Kind 30078 p-tagged us but d-tag not partner-sync — ignoring")
             return
         }
 
@@ -668,35 +770,49 @@ class NostrManager(context: Context) {
         // event, and re-decrypting triggers a fresh Amber prompt each time.
         if (keyStore.isEventProcessed(event.id)) {
             Log.d(TAG, "Partner sync event ${event.id.take(12)}… already processed — skipping decrypt")
+            Dbg.info(Cat.SYNC, "Partner sync event already processed — skipping decrypt")
             return
         }
+        // Prevent duplicate decrypts when 3 relays return the same event
+        if (!inflightEvents.add(event.id)) {
+            Log.d(TAG, "Partner sync event ${event.id.take(12)}… already being decrypted — skipping")
+            Dbg.info(Cat.SYNC, "Partner sync event already being decrypted — skipping")
+            return
+        }
+        try {
+            // Verify the sender is our configured partner
+            val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
+            if (expectedPartnerHex == null) {
+                Log.w(TAG, "Partner sync event received but no partner npub configured — ignoring")
+                Dbg.warn(Cat.SYNC, "Partner sync event received but no partner configured — ignoring")
+                return
+            }
+            if (event.pubkey != expectedPartnerHex) {
+                Log.w(TAG, "Partner sync event from unexpected pubkey ${event.pubkey.take(20)}... — ignoring")
+                Dbg.warn(Cat.SYNC, "Partner sync event from unexpected sender — ignoring")
+                return
+            }
 
-        // Verify the sender is our configured partner
-        val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
-        if (expectedPartnerHex == null) {
-            Log.w(TAG, "Partner sync event received but no partner npub configured — ignoring")
-            return
-        }
-        if (event.pubkey != expectedPartnerHex) {
-            Log.w(TAG, "Partner sync event from unexpected pubkey ${event.pubkey.take(20)}... — ignoring")
-            return
-        }
+            // Verify the event signature to prevent pubkey spoofing
+            val nostrEvent = NostrEvent(
+                id = event.id, pubkey = event.pubkey, created_at = event.createdAt,
+                kind = event.kind, tags = event.tags, content = event.content, sig = event.sig
+            )
+            if (!nostrEvent.verifySignature()) {
+                Log.w(TAG, "Partner sync event signature verification failed — ignoring")
+                Dbg.warn(Cat.SYNC, "Partner sync event signature verification failed — ignoring")
+                return
+            }
 
-        // Verify the event signature to prevent pubkey spoofing
-        val nostrEvent = NostrEvent(
-            id = event.id, pubkey = event.pubkey, created_at = event.createdAt,
-            kind = event.kind, tags = event.tags, content = event.content, sig = event.sig
-        )
-        if (!nostrEvent.verifySignature()) {
-            Log.w(TAG, "Partner sync event signature verification failed — ignoring")
-            return
+            val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
+            keyStore.markEventProcessed(event.id)
+            keyStore.saveLastBackupTime(event.createdAt)
+            restoreFromPayload(payload)
+            Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
+            Dbg.info(Cat.SYNC, "Partner sync restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
+        } finally {
+            inflightEvents.remove(event.id)
         }
-
-        val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
-        keyStore.markEventProcessed(event.id)
-        keyStore.saveLastBackupTime(event.createdAt)
-        restoreFromPayload(payload)
-        Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
     }
 
     /**
@@ -771,6 +887,7 @@ class NostrManager(context: Context) {
             )
             relayPool.publish(selfDelete.toJsonObject())
             Log.d(TAG, "Deleted self-backup on relays")
+            Dbg.info(Cat.SYNC, "Deleted self-backup on relays")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete self-backup", e)
             ok = false
@@ -798,6 +915,7 @@ class NostrManager(context: Context) {
             )
             relayPool.publish(partnerDelete.toJsonObject())
             Log.d(TAG, "Deleted partner sync on relays")
+            Dbg.info(Cat.SYNC, "Deleted partner sync on relays")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete partner sync", e)
             ok = false
@@ -842,3 +960,14 @@ data class RelayMatchResult(
     val partnerRelays: List<String>,
     val overlap: List<String>
 )
+
+sealed class PartnerStatus {
+    /** No partner npub configured. */
+    object NoPartner : PartnerStatus()
+    /** Partner has no Infans data on any relay (not running the app). */
+    object NoInfansData : PartnerStatus()
+    /** Partner has us configured — mutual relationship. */
+    object Mutual : PartnerStatus()
+    /** Partner runs Infans but has someone else (or nobody) configured as partner. */
+    data class HasDifferentPartner(val pTags: List<String>) : PartnerStatus()
+}

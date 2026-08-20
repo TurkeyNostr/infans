@@ -34,8 +34,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.turkbot.babytracker.data.entities.Child
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
 import com.turkbot.babytracker.nostr.NostrManager
+import com.turkbot.babytracker.nostr.PartnerStatus
 import com.turkbot.babytracker.nostr.RelayMatchResult
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.relay.RelayState
@@ -647,6 +650,105 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             }
         }
 
+        // ─── Partner Status ─────────────────────────────
+        item {
+            var statusChecking by remember { mutableStateOf(false) }
+            var partnerStatus by remember { mutableStateOf<PartnerStatus?>(null) }
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Partner Status",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    if (partnerNpubState == null) {
+                        Text(
+                            "No partner configured.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Button(
+                            onClick = {
+                                statusChecking = true
+                                partnerStatus = null
+                                scope.launch {
+                                    partnerStatus = nostrManager.checkPartnerStatus()
+                                    statusChecking = false
+                                }
+                            },
+                            enabled = !statusChecking && relayConnected,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (statusChecking) "Checking… (5s)" else "Check Partner Status")
+                        }
+
+                        if (partnerStatus != null) {
+                            Spacer(Modifier.height(12.dp))
+                            when (val status = partnerStatus!!) {
+                                is PartnerStatus.Mutual -> {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("✓ ", color = MaterialTheme.colorScheme.primary)
+                                        Text(
+                                            "Mutual — your partner has you configured. Data should sync.",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+                                is PartnerStatus.HasDifferentPartner -> {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("⚠ ", color = MaterialTheme.colorScheme.error)
+                                        Text(
+                                            "Your partner runs Infans but does NOT have you as their partner. " +
+                                                "They may have removed you or set a different npub.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                                is PartnerStatus.NoInfansData -> {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("? ", color = MaterialTheme.colorScheme.tertiary)
+                                        Text(
+                                            "No Infans data found for this npub on your relays. " +
+                                                "They may not be running Infans, or use different relays.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                is PartnerStatus.NoPartner -> {
+                                    Text(
+                                        "No partner configured.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ─── Reminders ───────────────────────────────────
         item {
             SectionHeader("Reminders")
@@ -902,6 +1004,87 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
                     }
                 )
+            }
+        }
+
+        // ─── Debug Log ───────────────────────────────────
+        item {
+            var showLog by remember { mutableStateOf(false) }
+            val logEntries by com.turkbot.babytracker.debug.DebugLogger.entries.collectAsState()
+            var logExporting by remember { mutableStateOf(false) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Debug Log", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "PII-free diagnostic log — no npubs, pubkeys, or personal data",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { showLog = !showLog }) {
+                            Text(if (showLog) "Hide Log" else "Show Log")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                logExporting = true
+                                scope.launch {
+                                    val uri = Dbg.export(context)
+                                    logExporting = false
+                                    uri?.let {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_STREAM, it)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share Debug Log"))
+                                    }
+                                }
+                            },
+                            enabled = !logExporting && logEntries.isNotEmpty()
+                        ) {
+                            Text(if (logExporting) "Exporting…" else "Export")
+                        }
+                        OutlinedButton(
+                            onClick = { Dbg.clear() },
+                            enabled = logEntries.isNotEmpty()
+                        ) {
+                            Text("Clear")
+                        }
+                    }
+                    if (showLog) {
+                        Spacer(Modifier.height(12.dp))
+                        if (logEntries.isEmpty()) {
+                            Text("No log entries yet", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                items(logEntries.reversed()) { entry ->
+                                    val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+                                        .format(java.util.Date(entry.timestamp))
+                                    val color = when (entry.level) {
+                                        Dbg.Level.ERROR -> MaterialTheme.colorScheme.error
+                                        Dbg.Level.WARN -> MaterialTheme.colorScheme.tertiary
+                                        Dbg.Level.INFO -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                    Text(
+                                        "$time [${entry.category.name}] ${entry.message}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = color,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

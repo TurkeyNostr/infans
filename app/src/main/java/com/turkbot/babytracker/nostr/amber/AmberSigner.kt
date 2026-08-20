@@ -16,6 +16,8 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.activity.result.ActivityResult
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.nostr.crypto.NostrSigner
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.events.NostrEvent
@@ -143,10 +145,12 @@ class AmberSigner(
                 val result = AmberBridge.launch(intent)
                 if (result.resultCode != -1) {  // Activity.RESULT_OK = -1
                     Log.e(TAG, "Signer returned code ${result.resultCode}")
+                    Dbg.error(Cat.AMBER, "Signer returned code ${result.resultCode}")
                     return null
                 }
                 if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
                     Log.d(TAG, "User rejected get_public_key")
+                    Dbg.warn(Cat.AMBER, "User rejected get_public_key")
                     return null
                 }
                 val pubkeyHex = result.data?.getStringExtra(EXTRA_RESULT)
@@ -178,6 +182,7 @@ class AmberSigner(
     }
 
     override suspend fun signEvent(unsigned: NostrEvent): NostrEvent {
+        Dbg.info(Cat.AMBER, "Amber: sign_event (kind=${unsigned.kind}) — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
@@ -193,6 +198,7 @@ class AmberSigner(
             throw AmberException("Signer returned code ${result.resultCode}")
         }
         if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            Dbg.warn(Cat.AMBER, "Amber: sign_event rejected by user")
             throw AmberException("User rejected sign request")
         }
         // Prefer the full signed event JSON; fall back to just the signature
@@ -208,6 +214,7 @@ class AmberSigner(
     }
 
     override suspend fun nip44Encrypt(plaintext: String, recipientPubkeyHex: String): String {
+        Dbg.info(Cat.AMBER, "Amber: nip44_encrypt — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
@@ -222,6 +229,7 @@ class AmberSigner(
             throw AmberException("Signer encrypt returned code ${result.resultCode}")
         }
         if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            Dbg.warn(Cat.AMBER, "Amber: nip44_encrypt rejected by user")
             throw AmberException("User rejected encrypt request")
         }
         val ciphertext = result.data?.getStringExtra(EXTRA_RESULT)
@@ -232,6 +240,7 @@ class AmberSigner(
     }
 
     override suspend fun nip44Decrypt(payload: String, senderPubkeyHex: String): String {
+        Dbg.info(Cat.AMBER, "Amber: nip44_decrypt — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
@@ -246,6 +255,7 @@ class AmberSigner(
             throw AmberException("Signer decrypt returned code ${result.resultCode}")
         }
         if (result.data?.getBooleanExtra(EXTRA_REJECTED, false) == true) {
+            Dbg.warn(Cat.AMBER, "Amber: nip44_decrypt rejected by user")
             throw AmberException("User rejected decrypt request")
         }
         val plaintext = result.data?.getStringExtra(EXTRA_RESULT)
