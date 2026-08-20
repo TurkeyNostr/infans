@@ -34,7 +34,10 @@ class RelayPool(
     private var relayUrls = initialRelays
     private var connections = relayUrls.map { RelayConnection(it, client) }
 
-    private val _events = MutableSharedFlow<NostrEventWrapper>(extraBufferCapacity = 64)
+    private val _events = MutableSharedFlow<NostrEventWrapper>(
+        replay = 0,
+        extraBufferCapacity = 256
+    )
     val events: SharedFlow<NostrEventWrapper> = _events
 
     private var scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

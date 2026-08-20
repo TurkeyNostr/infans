@@ -71,8 +71,11 @@ class NostrManager(context: Context) {
         "wss://relay.primal.net"
     )
 
-    // Effective relays — loaded from storage or defaults
-    private val effectiveRelays: List<String> = keyStore.getRelays() ?: defaultRelays
+    // Effective relays — always use defaults to ensure both parents are on the
+    // same relay set. Previously we saved NIP-65 relays per-user, which caused
+    // the two phones to end up on different relays — partner sync and DMs never
+    // crossed. Stored relay preferences are now ignored.
+    private val effectiveRelays: List<String> = defaultRelays
 
     val relayPool = RelayPool(effectiveRelays, httpClient)
     private val backupService = BackupService(appContext, relayPool)
@@ -300,10 +303,37 @@ class NostrManager(context: Context) {
     }
 
     private suspend fun _connectAndSubscribeInternal(signer: NostrSigner) {
+        // Start the event collector BEFORE connecting/subscribing so we don't
+        // miss any events that arrive immediately after subscription.
+        val myPubkeyHex = signer.pubkeyHex
+
+        scope.launch {
+            relayPool.events.collect { wrapper ->
+                try {
+                    when (wrapper.event.kind) {
+                        GiftWrapMessaging.KIND_GIFT_WRAP -> {
+                            if (wrapper.subscriptionId == SUB_DMS) {
+                                handleIncomingDM(wrapper.event, signer)
+                            }
+                        }
+                        BackupService.BACKUP_KIND -> {
+                            when (wrapper.subscriptionId) {
+                                SUB_BACKUP -> handleBackupEvent(wrapper.event, signer)
+                                SUB_PARTNER_SYNC,
+                                SUB_PARTNER_SYNC + "_author" -> handlePartnerSyncEvent(wrapper.event, signer)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error handling relay event kind=${wrapper.event.kind}", e)
+                }
+            }
+        }
+
+        // Now connect and subscribe — the collector is already listening
         relayPool.connect()
 
         // Subscribe to gift-wrapped DMs (kind 1059) addressed to us
-        val myPubkeyHex = signer.pubkeyHex
         val dmFilter = """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":100}"""
         relayPool.subscribe(SUB_DMS, dmFilter)
 
@@ -320,44 +350,34 @@ class NostrManager(context: Context) {
         val partnerSyncFilter = """{"kinds":[30078],"#p":["$myPubkeyHex"],"limit":50}"""
         relayPool.subscribe(SUB_PARTNER_SYNC, partnerSyncFilter)
 
+        // Also subscribe to ALL kind 30078 events authored by our partner, in case
+        // the relay doesn't index #p tags on kind 30078. We filter client-side.
+        val partnerNpubVal = _partnerNpub.value
+        if (partnerNpubVal != null) {
+            val partnerHex = npubToHex(partnerNpubVal)
+            if (partnerHex != null) {
+                val partnerAuthorFilter = """{"kinds":[30078],"authors":["$partnerHex"],"limit":50}"""
+                relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
+            }
+        }
+
         // If partner is set but we don't have their NIP-05 yet, fetch it
         if (_partnerNpub.value != null && _partnerNip05.value == null) {
             scope.launch { refreshPartnerNip05() }
         }
-
-        // Listen for incoming events
-        scope.launch {
-            relayPool.events.collect { wrapper ->
-                try {
-                    when (wrapper.event.kind) {
-                        GiftWrapMessaging.KIND_GIFT_WRAP -> {
-                            if (wrapper.subscriptionId == SUB_DMS) {
-                                handleIncomingDM(wrapper.event, signer)
-                            }
-                        }
-                        BackupService.BACKUP_KIND -> {
-                            when (wrapper.subscriptionId) {
-                                SUB_BACKUP -> handleBackupEvent(wrapper.event, signer)
-                                SUB_PARTNER_SYNC -> handlePartnerSyncEvent(wrapper.event, signer)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error handling relay event kind=${wrapper.event.kind}", e)
-                }
-            }
-        }
     }
 
     /**
-     * Fetch the user's NIP-65 relay list (kind 10002) and reconfigure the pool.
-     * Runs in background — does nothing if no relay list is found.
+     * Fetch the user's NIP-65 relay list (kind 10002).
+     * We do NOT auto-reconfigure to NIP-65 relays anymore — that caused the two
+     * phones to end up on different relay sets, so partner sync events and DMs
+     * never crossed. Instead, NIP-65 is informational only; the default relays
+     * (damus, nos.lol, primal) are used for all communication.
      */
     private suspend fun fetchAndApplyNip65Relays(pubkeyHex: String) {
         val relays = fetchNip65Relays(pubkeyHex)
         if (relays.isNotEmpty()) {
-            Log.d(TAG, "NIP-65: found ${relays.size} relays for user")
-            applyRelays(relays)
+            Log.d(TAG, "NIP-65: found ${relays.size} relays for user (not auto-applying — using defaults for partner sync)")
         } else {
             Log.d(TAG, "NIP-65: no relay list found, keeping current relays")
         }
@@ -372,7 +392,7 @@ class NostrManager(context: Context) {
             val filter = """{"kinds":[10002],"authors":["$pubkeyHex"],"limit":1}"""
             val deferred = CompletableDeferred<List<String>>()
 
-            // Use a one-shot subscription on the existing pool
+            // Start the collector BEFORE subscribing so we don't miss events
             val subId = SUB_NIP65
             val job = scope.launch {
                 relayPool.events.collect { wrapper ->
@@ -384,6 +404,7 @@ class NostrManager(context: Context) {
                     }
                 }
             }
+            // Subscribe after collector is ready
             relayPool.subscribe(subId, filter)
 
             try {

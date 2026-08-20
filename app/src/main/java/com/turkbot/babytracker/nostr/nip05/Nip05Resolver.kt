@@ -17,7 +17,9 @@ import com.turkbot.babytracker.nostr.crypto.NostrKeys
 import com.turkbot.babytracker.nostr.events.NostrEvent
 import com.turkbot.babytracker.nostr.relay.RelayPool
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -53,6 +55,7 @@ class Nip05Resolver(
         private const val SUB_PROFILE = "nip05_profile_sub"
     }
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
@@ -128,27 +131,26 @@ class Nip05Resolver(
         val filter = """{"kinds":[0],"authors":["$pubkeyHex"],"limit":1}"""
         val deferred = CompletableDeferred<String?>()
 
-        val job = kotlinx.coroutines.coroutineScope {
-            launch {
-                relayPool.events.collect { wrapper ->
-                    if (wrapper.subscriptionId == SUB_PROFILE && wrapper.event.kind == 0) {
-                        try {
-                            val metadata = json.parseToJsonElement(wrapper.event.content).jsonObject
-                            val nip05 = metadata["nip05"]?.jsonPrimitive?.contentOrNull
-                            if (!nip05.isNullOrBlank()) {
-                                deferred.complete(nip05)
-                            } else {
-                                deferred.complete(null)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to parse kind 0 metadata", e)
+        // Start collector BEFORE subscribing so we don't miss the event.
+        val job = scope.launch {
+            relayPool.events.collect { wrapper ->
+                if (wrapper.subscriptionId == SUB_PROFILE && wrapper.event.kind == 0) {
+                    try {
+                        val metadata = json.parseToJsonElement(wrapper.event.content).jsonObject
+                        val nip05 = metadata["nip05"]?.jsonPrimitive?.contentOrNull
+                        if (!nip05.isNullOrBlank()) {
+                            deferred.complete(nip05)
+                        } else {
                             deferred.complete(null)
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse kind 0 metadata", e)
+                        deferred.complete(null)
                     }
                 }
             }
         }
-
+        // Subscribe after collector is ready
         relayPool.subscribe(SUB_PROFILE, filter)
 
         try {
