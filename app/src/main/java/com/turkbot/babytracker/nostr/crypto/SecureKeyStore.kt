@@ -143,6 +143,7 @@ class SecureKeyStore(context: Context) {
             .remove(KEY_PROCESSED_EVENTS)
             .remove(KEY_LAST_DM_TIME)
             .remove(KEY_LAST_BACKUP_TIME)
+            .remove(KEY_LAST_PARTNER_SYNC_TIME)
             .apply()
     }
 
@@ -157,6 +158,17 @@ class SecureKeyStore(context: Context) {
     fun getLastBackupTime(): Long = prefs.getLong(KEY_LAST_BACKUP_TIME, 0L)
     fun saveLastBackupTime(seconds: Long) {
         prefs.edit().putLong(KEY_LAST_BACKUP_TIME, seconds).apply()
+    }
+
+    /**
+     * Separate cursor for partner-sync events — must NOT share with
+     * lastBackupTime. Self-backup events advance lastBackupTime, which
+     * would cause the partner-sync since-filter to skip partner events
+     * published before our own self-backup.
+     */
+    fun getLastPartnerSyncTime(): Long = prefs.getLong(KEY_LAST_PARTNER_SYNC_TIME, 0L)
+    fun saveLastPartnerSyncTime(seconds: Long) {
+        prefs.edit().putLong(KEY_LAST_PARTNER_SYNC_TIME, seconds).apply()
     }
 
     // ── Partner sync ───────────────────────────────────
@@ -211,6 +223,7 @@ class SecureKeyStore(context: Context) {
         private const val KEY_PROCESSED_EVENTS = "processed_sync_events"
         private const val KEY_LAST_DM_TIME = "last_dm_time"
         private const val KEY_LAST_BACKUP_TIME = "last_backup_time"
+        private const val KEY_LAST_PARTNER_SYNC_TIME = "last_partner_sync_time"
         private const val KEY_PARTNER_NPUB = "partner_npub"
         private const val KEY_PARTNER_NIP05 = "partner_nip05"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"

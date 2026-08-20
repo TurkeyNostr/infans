@@ -16,6 +16,8 @@ import android.content.Context
 import android.util.Log
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.data.repo.BackupPayload
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.nostr.crypto.NostrKeys
 import com.turkbot.babytracker.nostr.crypto.NostrSigner
 import com.turkbot.babytracker.nostr.relay.RelayPool
@@ -88,10 +90,12 @@ class BackupService(
             // 6. Publish to all relays
             relayPool.publish(event.toJsonObject())
             Log.d(TAG, "Backup published: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
+            Dbg.info(Cat.SYNC, "Self-backup built: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights — publish sent")
             return true
 
         } catch (e: Exception) {
             Log.e(TAG, "Backup export failed", e)
+            Dbg.error(Cat.SYNC, "Self-backup export failed — ${e.javaClass.simpleName}")
             return false
         }
     }
@@ -105,15 +109,21 @@ class BackupService(
         val sleeps = repo.allSleeps()
         val weights = repo.allWeights()
         val milestones = repo.allMilestones()
+        val diapers = repo.allDiapers()
+        val pumpings = repo.allPumpings()
+        val healthRecords = repo.allHealthRecords()
 
         return BackupPayload(
-            version = 1,
+            version = 2,
             exportedAt = System.currentTimeMillis(),
             children = children,
             feedings = feedings,
             sleeps = sleeps,
             weights = weights,
-            milestones = milestones
+            milestones = milestones,
+            diapers = diapers,
+            pumpings = pumpings,
+            healthRecords = healthRecords
         )
     }
 
@@ -191,9 +201,11 @@ class BackupService(
 
             relayPool.publish(event.toJsonObject())
             Log.d(TAG, "Partner sync published to ${partnerPubkeyHex.take(16)}...")
+            Dbg.info(Cat.SYNC, "Partner-sync built: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps — publish sent")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Partner sync export failed", e)
+            Dbg.error(Cat.SYNC, "Partner-sync export failed — ${e.javaClass.simpleName}")
             return false
         }
     }

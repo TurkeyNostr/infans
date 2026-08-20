@@ -55,4 +55,7 @@ object UnitPreferences {
 
     fun defaultHeightUnit(context: Context): String =
         if (getSystem(context) == System.IMPERIAL) "in" else "cm"
+
+    fun defaultTempUnit(context: Context): String =
+        if (getSystem(context) == System.IMPERIAL) "F" else "C"
 }

@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.HealthRecord
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.UnitPreferences
+import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -41,7 +43,10 @@ import java.util.Locale
 fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val healthRecords by viewModel.healthRecords.collectAsState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     var temperatureText by remember { mutableStateOf("") }
+    var tempUnit by remember { mutableStateOf(UnitPreferences.defaultTempUnit(context)) }
+    val tempUnits = listOf("C", "F")
     var medicationText by remember { mutableStateOf("") }
     var doseText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
@@ -88,12 +93,21 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                             temperatureText = it.filter { c -> c.isDigit() || c == '.' }
                             showError = false
                         },
-                        label = { Text("Temperature (°C)") },
-                        suffix = { Text("°C") },
+                        label = { Text("Temperature") },
+                        suffix = { Text(if (tempUnit == "F") "°F" else "°C") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        tempUnits.forEachIndexed { index, unit ->
+                            SegmentedButton(
+                                selected = tempUnit == unit,
+                                onClick = { tempUnit = unit },
+                                shape = SegmentedButtonDefaults.itemShape(index, tempUnits.size)
+                            ) { Text(if (unit == "F") "°F" else "°C") }
+                        }
+                    }
 
                     OutlinedTextField(
                         value = medicationText,
@@ -133,7 +147,8 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 
                     Button(
                         onClick = {
-                            val temp = temperatureText.toDoubleOrNull()
+                            val tempRaw = temperatureText.toDoubleOrNull()
+                            val temp = tempRaw?.let { Units.toC(it, tempUnit) }
                             val med = medicationText.ifBlank { null }
                             if (temp == null && med == null) {
                                 showError = true
@@ -219,9 +234,11 @@ private fun HealthRecordCard(
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val displayTempUnit = remember { UnitPreferences.defaultTempUnit(context) }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val feverThreshold = 38.0
-    val isFever = record.temperature != null && record.temperature >= feverThreshold
+    val feverThresholdC = 38.0
+    val isFever = record.temperature != null && record.temperature >= feverThresholdC
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -238,7 +255,7 @@ private fun HealthRecordCard(
                 // Temperature (red if fever)
                 if (record.temperature != null) {
                     Text(
-                        String.format(Locale.getDefault(), "%.1f°C", record.temperature),
+                        Units.fmtTemp(record.temperature, displayTempUnit),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = if (isFever) MaterialTheme.colorScheme.error

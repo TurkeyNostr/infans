@@ -13,6 +13,8 @@
 package com.turkbot.babytracker.nostr.messaging
 
 import android.util.Log
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.nostr.crypto.LocalSigner
 import com.turkbot.babytracker.nostr.crypto.NostrKeys
 import com.turkbot.babytracker.nostr.crypto.NostrSigner
@@ -63,6 +65,7 @@ class GiftWrapMessaging(
         try {
             val recipientPubKey = NostrKeys.decodeNpub(recipientNpub)
             val recipientPubHex = NostrKeys.toHex(recipientPubKey)
+            Dbg.info(Cat.DM, "Sending DM: encrypting rumor (1/4)")
 
             // 1. Create the rumor (kind 14 = private direct message) — unsigned, included in seal
             val rumor = NostrEvent.unsigned(
@@ -77,6 +80,7 @@ class GiftWrapMessaging(
             val rumorJson = rumor.toJsonObject()
             val sealedContent = signer.nip44Encrypt(rumorJson, recipientPubHex)
 
+            Dbg.info(Cat.DM, "Sending DM: signing seal (2/4)")
             val seal = NostrEvent.createSigned(
                 kind = KIND_SEAL,
                 content = sealedContent,
@@ -91,6 +95,7 @@ class GiftWrapMessaging(
             val sealJson = seal.toJsonObject()
             val wrappedContent = oneTimeSigner.nip44Encrypt(sealJson, recipientPubHex)
 
+            Dbg.info(Cat.DM, "Sending DM: building gift wrap (3/4)")
             val giftWrap = NostrEvent.create(
                 kind = KIND_GIFT_WRAP,
                 content = wrappedContent,
@@ -104,12 +109,14 @@ class GiftWrapMessaging(
             )
 
             // 4. Publish the gift wrap to relays
+            Dbg.info(Cat.DM, "Sending DM: publishing gift wrap (4/4)")
             relayPool.publish(giftWrap.toJsonObject())
-            Log.d(TAG, "DM sent to ${recipientNpub.take(20)}...")
+            Dbg.info(Cat.DM, "DM sent to relays")
             return true
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send DM", e)
+            Dbg.exception(Cat.DM, "Failed to send DM", e)
             return false
         }
     }
@@ -132,6 +139,7 @@ class GiftWrapMessaging(
             // 1. NIP-44 decrypt the gift wrap content (using one-time sender pubkey)
             //    The sender's real pubkey is NOT known yet — it's hidden inside the
             //    seal. This decrypt is unavoidable regardless of sender filtering.
+            Dbg.info(Cat.DM, "Unwrapping DM: decrypting gift wrap (1/3)")
             val sealJson = signer.nip44Decrypt(event.content, event.pubkey)
 
             // 2. Parse the seal (kind 13)
@@ -144,17 +152,19 @@ class GiftWrapMessaging(
             // 4. If we only want messages from a specific sender, check NOW — before
             //    the expensive second decrypt. The seal's pubkey is the real sender.
             if (expectedSenderHex != null && seal.pubkey != expectedSenderHex) {
-                Log.d(TAG, "Seal from non-expected sender ${seal.pubkey.take(20)}... — skipping second decrypt")
+                Dbg.info(Cat.DM, "Seal from non-partner sender — skipping second decrypt")
                 return null
             }
 
             // 5. NIP-44 decrypt the seal content → rumor JSON (via signer)
+            Dbg.info(Cat.DM, "Unwrapping DM: decrypting seal (2/3)")
             val rumorJson = signer.nip44Decrypt(seal.content, seal.pubkey)
 
             // 6. Parse the rumor (kind 14)
             val rumor = NostrEvent.fromJson(rumorJson)
             require(rumor.kind == KIND_PRIVATE_DIRECT_MESSAGE) { "Expected kind 14, got ${rumor.kind}" }
 
+            Dbg.info(Cat.DM, "Unwrapping DM: message decrypted (3/3)")
             return UnwrappedMessage(
                 senderPubkeyHex = seal.pubkey,
                 senderNpub = NostrKeys.encodeNpub(NostrKeys.fromHex(seal.pubkey)),
@@ -164,6 +174,7 @@ class GiftWrapMessaging(
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to unwrap gift wrap", e)
+            Dbg.exception(Cat.DM, "Failed to unwrap gift wrap", e)
             return null
         }
     }

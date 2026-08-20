@@ -94,6 +94,26 @@ object Units {
         else -> "${"%.1f".format(cm)} cm"
     }
 
+    // ── Temperature ────────────────────────────────────
+    // Internal storage is always °C. Display can be °C or °F.
+
+    fun cToF(celsius: Double): Double = celsius * 9.0 / 5.0 + 32.0
+    fun fToC(fahrenheit: Double): Double = (fahrenheit - 32.0) * 5.0 / 9.0
+
+    /** Convert a user-entered temperature to °C for storage. */
+    fun toC(value: Double, unit: String): Double = when (unit) {
+        "C" -> value
+        "F" -> fToC(value)
+        else -> value
+    }
+
+    /** Format a stored °C value in the user's preferred display unit. */
+    fun fmtTemp(celsius: Double, unit: String): String = when (unit) {
+        "C" -> "${"%.1f".format(celsius)}°C"
+        "F" -> "${"%.1f".format(cToF(celsius))}°F"
+        else -> "${"%.1f".format(celsius)}°C"
+    }
+
     // ── Duration ───────────────────────────────────────
     fun fmtDuration(minutes: Int): String {
         val h = minutes / 60

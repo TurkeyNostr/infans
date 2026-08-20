@@ -19,6 +19,8 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
+import com.turkbot.babytracker.util.UnitPreferences
+import com.turkbot.babytracker.util.Units
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -37,6 +39,8 @@ class PdfExporter(
 ) {
     private val dateFmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
     private val timeFmt = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
+
+    private val displayTempUnit = UnitPreferences.defaultTempUnit(context)
 
     private val pageWidth = 595  // A4 width in points (1pt = 1/72 inch)
     private val pageHeight = 842 // A4 height in points
@@ -197,7 +201,7 @@ class PdfExporter(
                 childHealth.forEach { h ->
                     val time = timeFmt.format(Date(h.time))
                     val parts = mutableListOf<String>()
-                    h.temperature?.let { parts.add(String.format("%.1f°C", it)) }
+                    h.temperature?.let { parts.add(Units.fmtTemp(it, displayTempUnit)) }
                     h.medication?.let { parts.add("$it ${h.dose ?: ""}".trim()) }
                     val note = h.note?.let { "  •  $it" } ?: ""
                     drawRow(time, "${parts.joinToString("  •  ")}$note")

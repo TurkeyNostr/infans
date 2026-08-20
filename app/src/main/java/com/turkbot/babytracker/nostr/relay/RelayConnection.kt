@@ -13,6 +13,8 @@
 package com.turkbot.babytracker.nostr.relay
 
 import android.util.Log
+import com.turkbot.babytracker.debug.DebugLogger as Dbg
+import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,8 +76,12 @@ class RelayConnection(
                         "OK" -> {
                             val eventId = arr[1].jsonPrimitive.content
                             val success = arr[2].jsonPrimitive.boolean
-                            if (!success) {
-                                Log.w("Relay", "Event $eventId rejected by $url: ${arr.getOrNull(3)?.jsonPrimitive?.content}")
+                            if (success) {
+                                Dbg.info(Cat.RELAY, "Event accepted by $url")
+                            } else {
+                                val msg = arr.getOrNull(3)?.jsonPrimitive?.content
+                                Log.w("Relay", "Event $eventId rejected by $url: $msg")
+                                Dbg.warn(Cat.RELAY, "Event rejected by $url${if (msg != null) ": $msg" else ""}")
                             }
                         }
                         "EOSE" -> {
@@ -115,9 +121,18 @@ class RelayConnection(
 
     /**
      * Publish a signed event to this relay.
+     * If the WebSocket is not connected, the event is silently dropped —
+     * we log a warning so the user can see in the debug log that the
+     * publish never reached the relay.
      */
     fun publish(eventJson: String) {
-        ws?.send("""["EVENT",$eventJson]""")
+        val w = ws
+        if (w == null || _state.value != RelayState.CONNECTED) {
+            Log.w("Relay", "Publish attempted on $url but not connected (state=${_state.value})")
+            Dbg.warn(Cat.RELAY, "Publish to $url dropped — not connected")
+            return
+        }
+        w.send("""["EVENT",$eventJson]""")
     }
 
     /**

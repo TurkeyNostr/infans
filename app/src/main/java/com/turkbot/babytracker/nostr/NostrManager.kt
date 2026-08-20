@@ -36,6 +36,8 @@ import com.turkbot.babytracker.nostr.relay.RelayState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -144,6 +146,18 @@ class NostrManager(context: Context) {
     /** Event IDs currently being decrypted — prevents the same event from
      *  triggering multiple Amber prompts when 3 relays each return it. */
     private val inflightEvents = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /** Serializes backup exports — prevents concurrent exportBackup() calls
+     *  (data-entry + manual button) from interleaving Amber prompts, which
+     *  produces a 4th encrypt where a sign_event should be and silently
+     *  drops the partner-sync event. */
+    private val backupMutex = Mutex()
+
+    /** Serializes DM sending — prevents sendDirectMessage() from interleaving
+     *  Amber prompts with a concurrent exportBackup(). Both use the same signer,
+     *  so without serialization the encrypt/sign sequence for one can preempt
+     *  the other (same class of bug as the backup interleaving). */
+    private val messagingMutex = Mutex()
 
     companion object {
         private const val TAG = "NostrManager"
@@ -422,18 +436,15 @@ class NostrManager(context: Context) {
         relayPool.connect()
 
         // Subscribe to gift-wrapped DMs (kind 1059) addressed to us.
-        // Use 'since' to only fetch new DMs since last launch — avoids re-decrypting
-        // historical DMs (each triggering 2 Amber prompts) on every reconnect.
+        // NO 'since' filter: NIP-17 gift wraps have RANDOMIZED timestamps
+        // (up to 2 days in the past), so a since-filter would drop new messages
+        // whose randomized created_at falls before our cursor. Dedup is handled
+        // client-side via repo.messageExists() + inflightEvents.
         // Limit 20: each DM requires 2 sequential Amber nip44_decrypt calls (gift
         // wrap → seal → rumor), so 20 DMs = 40 prompts max on first launch.
-        val lastDmTime = keyStore.getLastDmTime()
-        val dmFilter = if (lastDmTime > 0) {
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"since":$lastDmTime,"limit":20}"""
-        } else {
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":20}"""
-        }
+        val dmFilter = """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":20}"""
         relayPool.subscribe(SUB_DMS, dmFilter)
-        Dbg.info(Cat.RELAY, "Subscribed to DMs (since=${if (lastDmTime > 0) lastDmTime else "start"})")
+        Dbg.info(Cat.RELAY, "Subscribed to DMs (no since-filter — gift wrap timestamps are randomized)")
 
         // Subscribe to our own encrypted backups (kind 30078 authored by us,
         // d-tag = "baby-tracker-backup"). Filtering by #d server-side avoids
@@ -451,9 +462,12 @@ class NostrManager(context: Context) {
         // Subscribe to partner sync events (kind 30078 where #p = our pubkey,
         // d-tag = "baby-tracker-sync"). Filtering by #d server-side avoids
         // pulling down unrelated 30078 events that happen to p-tag us.
+        // Uses a SEPARATE cursor from self-backup — self-backup events advance
+        // lastBackupTime, which must not skip partner events published earlier.
         val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
-        val partnerSyncFilter = if (lastBackupTime > 0) {
-            """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
+        val lastPartnerSyncTime = keyStore.getLastPartnerSyncTime()
+        val partnerSyncFilter = if (lastPartnerSyncTime > 0) {
+            """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"since":$lastPartnerSyncTime,"limit":10}"""
         } else {
             """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
         }
@@ -466,8 +480,8 @@ class NostrManager(context: Context) {
         if (partnerNpubVal != null) {
             val partnerHex = npubToHex(partnerNpubVal)
             if (partnerHex != null) {
-                val partnerAuthorFilter = if (lastBackupTime > 0) {
-                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
+                val partnerAuthorFilter = if (lastPartnerSyncTime > 0) {
+                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastPartnerSyncTime,"limit":10}"""
                 } else {
                     """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                 }
@@ -496,10 +510,10 @@ class NostrManager(context: Context) {
             if (partnerNpubVal != null) {
                 val partnerHex = npubToHex(partnerNpubVal)
                 if (partnerHex != null) {
-                    val lastBackupTime = keyStore.getLastBackupTime()
+                    val lastPartnerSyncTime = keyStore.getLastPartnerSyncTime()
                     val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
-                    val partnerAuthorFilter = if (lastBackupTime > 0) {
-                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastBackupTime,"limit":10}"""
+                    val partnerAuthorFilter = if (lastPartnerSyncTime > 0) {
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"since":$lastPartnerSyncTime,"limit":10}"""
                     } else {
                         """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                     }
@@ -713,7 +727,7 @@ class NostrManager(context: Context) {
             Log.d(TAG, "Stored DM from partner")
             Dbg.info(Cat.DM, "DM received from partner — stored")
 
-            keyStore.saveLastDmTime(event.createdAt)
+            keyStore.saveLastDmTime(System.currentTimeMillis() / 1000)
         } finally {
             inflightEvents.remove(event.id)
         }
@@ -814,7 +828,7 @@ class NostrManager(context: Context) {
 
             val payload = backupService.decryptPartnerBackup(event.content, signer, expectedPartnerHex) ?: return
             keyStore.markEventProcessed(event.id)
-            keyStore.saveLastBackupTime(event.createdAt)
+            keyStore.saveLastPartnerSyncTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
             Dbg.info(Cat.SYNC, "Partner sync restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
@@ -852,15 +866,29 @@ class NostrManager(context: Context) {
      */
     suspend fun exportBackup(): Boolean {
         val signer = _signer.value ?: return false
+        // Serialize all backup exports — prevents concurrent calls from
+        // interleaving Amber encrypt/sign prompts and losing events.
+        return backupMutex.withLock {
+            _exportBackupLocked(signer)
+        }
+    }
+
+    private suspend fun _exportBackupLocked(signer: NostrSigner): Boolean {
         val selfOk = backupService.export(signer)
+        Dbg.info(Cat.SYNC, "Self-backup publish ${if (selfOk) "sent to relays" else "failed"}")
 
         // Dual-publish to partner if configured
         val partnerNpubVal = _partnerNpub.value
         if (selfOk && partnerNpubVal != null) {
             val partnerHex = npubToHex(partnerNpubVal)
             if (partnerHex != null) {
-                backupService.exportToPartner(signer, partnerHex)
+                val partnerOk = backupService.exportToPartner(signer, partnerHex)
+                Dbg.info(Cat.SYNC, "Partner-sync publish ${if (partnerOk) "sent to relays" else "failed"}")
+            } else {
+                Dbg.warn(Cat.SYNC, "Partner npub set but could not decode to hex — skipping partner sync")
             }
+        } else if (selfOk && partnerNpubVal == null) {
+            Dbg.info(Cat.SYNC, "No partner configured — skipping partner-sync publish")
         }
         return selfOk
     }
@@ -948,10 +976,15 @@ class NostrManager(context: Context) {
         val configuredPartner = _partnerNpub.value
         if (configuredPartner == null || configuredPartner != recipientNpub.trim()) {
             Log.w(TAG, "Blocked send to non-partner recipient — only the configured partner is allowed")
+            Dbg.warn(Cat.DM, "Blocked send to non-partner recipient")
             return false
         }
 
-        return messaging.sendDirectMessage(text, signer, recipientNpub)
+        // Serialize with backups — both use the same Amber signer and their
+        // encrypt/sign prompts must not interleave.
+        return messagingMutex.withLock {
+            messaging.sendDirectMessage(text, signer, recipientNpub)
+        }
     }
 
     /**

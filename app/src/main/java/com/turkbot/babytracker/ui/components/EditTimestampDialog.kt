@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * A dialog that lets the user pick a new date + time for an event.
@@ -118,12 +119,20 @@ fun EditTimestampDialog(
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = {
-                        // Combine selected date + time into epoch millis
+                        // Combine selected date + time into epoch millis.
+                        // DatePicker.selectedDateMillis is UTC midnight for the
+                        // selected calendar date. Extract the date parts in UTC
+                        // (so the user's selection is preserved), then combine
+                        // with the time-picker hour/minute in the local timezone.
                         val dateMillis = datePickerState.selectedDateMillis
                         if (dateMillis != null) {
+                            val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                            utcCal.timeInMillis = dateMillis
                             val cal = Calendar.getInstance().apply {
-                                timeInMillis = dateMillis
-                                // DatePicker gives midnight UTC; set local time
+                                clear()
+                                set(Calendar.YEAR, utcCal.get(Calendar.YEAR))
+                                set(Calendar.MONTH, utcCal.get(Calendar.MONTH))
+                                set(Calendar.DAY_OF_MONTH, utcCal.get(Calendar.DAY_OF_MONTH))
                                 set(Calendar.HOUR_OF_DAY, timePickerState.hour)
                                 set(Calendar.MINUTE, timePickerState.minute)
                                 set(Calendar.SECOND, 0)
