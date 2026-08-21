@@ -64,6 +64,7 @@ import com.turkbot.babytracker.ui.screens.isOnboardingComplete
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import android.content.Context
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModelFactory
 
@@ -192,7 +193,11 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             composable("pumping") { PumpingScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable("health") { HealthScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable(Screen.Notes.route) { NotesScreen(viewModel, app.nostrManager) }
-            composable("settings") { SettingsScreen(viewModel, app.nostrManager) }
+            composable("settings") { SettingsScreen(viewModel, app.nostrManager, onReplayOnboarding = {
+                context.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+                    .edit().putBoolean("onboarding_complete", false).apply()
+                showOnboarding.value = true
+            }) }
         }
     }
 }

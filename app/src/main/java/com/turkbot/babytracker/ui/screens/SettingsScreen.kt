@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,7 +51,7 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
+fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onReplayOnboarding: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val children by viewModel.children.collectAsState()
     val signer by nostrManager.signer.collectAsState()
@@ -1266,6 +1267,42 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Add Child")
+            }
+        }
+
+        // ─── Help ─────────────────────────────────────────
+        item {
+            SectionHeader("Help")
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Setup Wizard",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Replay the onboarding tutorial if you missed a step or want to review the setup options.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedButton(
+                        onClick = onReplayOnboarding,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Show Setup Wizard")
+                    }
+                }
             }
         }
 
