@@ -595,18 +595,39 @@ class NostrManager(context: Context) {
 
     /**
      * Fetch the user's NIP-65 relay list (kind 10002) and reconfigure the pool.
-     * Uses NIP-65 relays if found; falls back to defaults if not.
+     * Uses NIP-65 relays exclusively if found; falls back to defaults only if not.
+     * When a partner is configured, their NIP-65 relays are also fetched and
+     * merged in so both parents' events are reachable.
      */
     private suspend fun fetchAndApplyNip65Relays(pubkeyHex: String) {
         val relays = fetchNip65Relays(pubkeyHex)
         if (relays.isNotEmpty()) {
             Log.d(TAG, "NIP-65: found ${relays.size} relays for user, applying")
-        Dbg.info(Cat.RELAY, "NIP-65: found ${relays.size} relays, merging with defaults")
-            applyRelays(relays)
-            // Re-subscribe partner sync on the new relays if partner is configured
+            Dbg.info(Cat.RELAY, "NIP-65: found ${relays.size} relays for user")
+
+            // Also fetch partner's NIP-65 relays and merge — ensures we can
+            // reach their events even if their relay list differs from ours.
             val partnerNpubVal = _partnerNpub.value
-            if (partnerNpubVal != null) {
+            val partnerRelays = if (partnerNpubVal != null) {
                 val partnerHex = npubToHex(partnerNpubVal)
+                if (partnerHex != null) fetchNip65ForPubkey(partnerHex, "partner_nip65_for_relays")
+                else emptyList()
+            } else emptyList()
+
+            if (partnerRelays.isNotEmpty()) {
+                val combined = (relays + partnerRelays).distinct()
+                Log.d(TAG, "NIP-65: merging ${relays.size} user + ${partnerRelays.size} partner relays = ${combined.size} total")
+                Dbg.info(Cat.RELAY, "Relays reconfigured: ${combined.size} total (user NIP-65 + partner NIP-65)")
+                applyRelays(combined)
+            } else {
+                Dbg.info(Cat.RELAY, "Relays reconfigured: ${relays.size} total (user NIP-65 only)")
+                applyRelays(relays)
+            }
+
+            // Re-subscribe partner sync on the new relays if partner is configured
+            val partnerNpub = _partnerNpub.value
+            if (partnerNpub != null) {
+                val partnerHex = npubToHex(partnerNpub)
                 if (partnerHex != null) {
                     val lastPartnerSyncTime = keyStore.getLastPartnerSyncTime()
                     val partnerSyncDTag = BackupService.PARTNER_SYNC_D_TAG
@@ -660,9 +681,9 @@ class NostrManager(context: Context) {
 
     /**
      * Apply a new relay set: save to storage, reconfigure the pool.
-     * Merges NIP-65 relays with default relays so both parents always share
-     * at least the default relays — preventing disjoint relay sets where
-     * partner data can't be found.
+     * Uses only the provided relays — no default relay merge.
+     * Caller is responsible for ensuring the relay set is complete
+     * (e.g. merging partner's NIP-65 relays before calling).
      */
     private fun applyRelays(urls: List<String>) {
         if (urls.isEmpty()) return
@@ -671,15 +692,10 @@ class NostrManager(context: Context) {
             .distinct()
         if (sanitized.isEmpty()) return
 
-        // Merge NIP-65 relays with defaults — guarantees both parents share
-        // at least the default relays even if their NIP-65 lists differ
-        val merged = (sanitized + defaultRelays).distinct()
-
-        keyStore.saveRelays(merged)
-        relayPool.reconfigure(merged)
-        (currentRelays as MutableStateFlow).value = merged
-        Log.d(TAG, "Relays updated to: $merged (NIP-65 + defaults merged)")
-        Dbg.info(Cat.RELAY, "Relays reconfigured: ${merged.size} total (NIP-65 + defaults merged)")
+        keyStore.saveRelays(sanitized)
+        relayPool.reconfigure(sanitized)
+        (currentRelays as MutableStateFlow).value = sanitized
+        Log.d(TAG, "Relays updated to: $sanitized")
     }
 
     /**
