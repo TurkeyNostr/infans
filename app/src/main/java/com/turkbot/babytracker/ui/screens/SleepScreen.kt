@@ -90,7 +90,10 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     )
 
                     // ── Live timer ──
-                    LiveTimer(label = "Sleep") { minutes ->
+                    LiveTimer(
+                        label = "Sleep",
+                        alarmPresets = listOf(30, 45, 60, 90)
+                    ) { minutes ->
                         viewModel.addSleep(
                             start = System.currentTimeMillis() - minutes * 60_000L,
                             duration = minutes,

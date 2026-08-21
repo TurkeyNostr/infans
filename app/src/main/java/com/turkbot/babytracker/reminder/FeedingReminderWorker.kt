@@ -102,6 +102,43 @@ object ReminderScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(FeedingReminderWorker.WORK_NAME)
     }
 
+    // ── Timer Alarm (one-shot) ─────────────────────────
+
+    /**
+     * Schedule a one-time timer alarm that fires after [delayMinutes].
+     * Uses a unique work name so only one timer alarm is active at a time —
+     * starting a new one cancels the previous.
+     */
+    fun scheduleTimerAlarm(context: Context, label: String, delayMinutes: Int) {
+        if (delayMinutes <= 0) {
+            cancelTimerAlarm(context)
+            return
+        }
+
+        val request = androidx.work.OneTimeWorkRequestBuilder<TimerAlarmWorker>()
+            .setInitialDelay(delayMinutes.toLong(), java.util.concurrent.TimeUnit.MINUTES)
+            .setInputData(
+                androidx.work.workDataOf(
+                    TimerAlarmWorker.KEY_LABEL to label,
+                    TimerAlarmWorker.KEY_MINUTES to delayMinutes,
+                )
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            TimerAlarmWorker.WORK_NAME,
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    /**
+     * Cancel any pending timer alarm.
+     */
+    fun cancelTimerAlarm(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(TimerAlarmWorker.WORK_NAME)
+    }
+
     /**
      * Create the notification channel (required on API 26+).
      */

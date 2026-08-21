@@ -163,7 +163,10 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 }
                             }
                             // ── Live timer for breastfeeding ──
-                            LiveTimer(label = "Breast") { minutes ->
+                            LiveTimer(
+                                label = "Breast",
+                                alarmPresets = listOf(5, 10, 15, 20)
+                            ) { minutes ->
                                 val saved = viewModel.addFeeding(
                                     type = "breast",
                                     amount = null,
