@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *

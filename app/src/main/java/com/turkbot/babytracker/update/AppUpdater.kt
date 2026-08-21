@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
  * The asset's "browser_download_url" is a direct public download link.
  * Version comparison is by versionName (semantic versioning).
  */
-class ForgejoUpdater(
+class AppUpdater(
     private val context: Context,
     private val apiBase: String = GITHUB_API_BASE,
     private val currentVersionName: String

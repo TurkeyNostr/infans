@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -21,7 +21,7 @@ import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.reminder.ReminderScheduler
-import com.turkbot.babytracker.update.ForgejoUpdater
+import com.turkbot.babytracker.update.AppUpdater
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -77,11 +77,8 @@ class BabyViewModel(
         .filterNotNull().flatMapLatest { repo.healthRecords(it.id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val messages: StateFlow<List<ChatMessage>> = repo.messages()
+    val notes: StateFlow<List<Note>> = repo.notes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val unreadCount: StateFlow<Int> = repo.unreadCount()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // Nostr state
     val signer = nostr.signer
@@ -147,6 +144,13 @@ class BabyViewModel(
     fun updateFeedingTime(id: String, time: Long) {
         viewModelScope.launch {
             repo.updateFeedingTime(id, time)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateFeedingFields(id: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?) {
+        viewModelScope.launch {
+            repo.updateFeedingFields(id, amount, unit, breastSide, duration, note)
             nostr.exportBackup()
         }
     }
@@ -382,13 +386,13 @@ class BabyViewModel(
         "1.0.0"
     }
 
-    private val updater = ForgejoUpdater(
+    private val updater = AppUpdater(
         app,
         currentVersionName = currentVersionName
     )
 
-    private val _updateInfo = MutableStateFlow<ForgejoUpdater.UpdateInfo?>(null)
-    val updateInfo: StateFlow<ForgejoUpdater.UpdateInfo?> = _updateInfo
+    private val _updateInfo = MutableStateFlow<AppUpdater.UpdateInfo?>(null)
+    val updateInfo: StateFlow<AppUpdater.UpdateInfo?> = _updateInfo
 
     private val _updateChecking = MutableStateFlow(false)
     val updateChecking: StateFlow<Boolean> = _updateChecking
@@ -404,15 +408,15 @@ class BabyViewModel(
             _updateChecking.value = true
             _updateMessage.value = null
             when (val result = updater.checkForUpdate()) {
-                is ForgejoUpdater.CheckResult.UpdateAvailable -> {
+                is AppUpdater.CheckResult.UpdateAvailable -> {
                     _updateInfo.value = result.info
                     _updateMessage.value = null
                 }
-                is ForgejoUpdater.CheckResult.UpToDate -> {
+                is AppUpdater.CheckResult.UpToDate -> {
                     _updateInfo.value = null
                     _updateMessage.value = "You're up to date! (v$currentVersionName)"
                 }
-                is ForgejoUpdater.CheckResult.Error -> {
+                is AppUpdater.CheckResult.Error -> {
                     _updateInfo.value = null
                     _updateMessage.value = result.message
                 }
@@ -443,8 +447,24 @@ class BabyViewModel(
         updater.setAutoUpdateEnabled(enabled)
     }
 
-    fun sendDirectMessage(text: String, recipientNpub: String) {
-        viewModelScope.launch { nostr.sendMessage(text, recipientNpub) }
+    fun addNote(text: String) {
+        val signer = nostr.signer.value ?: return
+        viewModelScope.launch {
+            repo.saveNote(Note(
+                id = UUID.randomUUID().toString(),
+                authorPubkey = signer.pubkeyHex,
+                content = text,
+                createdAt = System.currentTimeMillis()
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deleteNote(note: Note) {
+        viewModelScope.launch {
+            repo.deleteNote(note)
+            nostr.exportBackup()
+        }
     }
 
     fun exportBackup() {

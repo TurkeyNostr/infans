@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent notes.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -16,6 +16,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.turkbot.babytracker.data.dao.*
 import com.turkbot.babytracker.data.entities.*
 
@@ -26,12 +28,12 @@ import com.turkbot.babytracker.data.entities.*
         Sleep::class,
         Weight::class,
         Milestone::class,
-        ChatMessage::class,
+        Note::class,
         Diaper::class,
         Pumping::class,
         HealthRecord::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,7 +42,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sleepDao(): SleepDao
     abstract fun weightDao(): WeightDao
     abstract fun milestoneDao(): MilestoneDao
-    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun noteDao(): NoteDao
     abstract fun diaperDao(): DiaperDao
     abstract fun pumpingDao(): PumpingDao
     abstract fun healthRecordDao(): HealthRecordDao
@@ -49,13 +51,36 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /**
+         * Migration 2→3: drop the old chat_messages table (gift-wrap DMs
+         * replaced by notes that piggyback on the sync payload) and create
+         * the new notes table. All tracking data (feedings, sleeps, weights,
+         * etc.) is preserved — only chat history is lost.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS chat_messages")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS notes (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        authorPubkey TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )"""
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "baby-tracker"
-                ).fallbackToDestructiveMigration().build().also {
+                )
+                .addMigrations(MIGRATION_2_3)
+                .fallbackToDestructiveMigration()
+                .build().also {
                     INSTANCE = it
                 }
             }

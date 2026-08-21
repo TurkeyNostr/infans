@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -112,9 +112,10 @@ class BackupService(
         val diapers = repo.allDiapers()
         val pumpings = repo.allPumpings()
         val healthRecords = repo.allHealthRecords()
+        val notes = repo.allNotes()
 
         return BackupPayload(
-            version = 2,
+            version = 3,
             exportedAt = System.currentTimeMillis(),
             children = children,
             feedings = feedings,
@@ -123,7 +124,8 @@ class BackupService(
             milestones = milestones,
             diapers = diapers,
             pumpings = pumpings,
-            healthRecords = healthRecords
+            healthRecords = healthRecords,
+            notes = notes
         )
     }
 

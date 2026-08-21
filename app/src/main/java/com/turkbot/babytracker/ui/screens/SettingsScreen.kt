@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -43,6 +43,7 @@ import com.turkbot.babytracker.nostr.RelayMatchResult
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.relay.RelayState
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -174,7 +175,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "Share this ${if (myNip05 != null) "NIP-05" else "npub"} with the other parent so they can send you messages.",
+                            "Share this ${if (myNip05 != null) "NIP-05" else "npub"} with the other parent so they can sync data with you.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -418,10 +419,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             }
         }
 
-        // ─── Relay Status ────────────────────────────────
+        // ─── Sync Diagnostic ─────────────────────────────
         item {
-            var relayCheckResult by remember { mutableStateOf<Map<String, Boolean>?>(null) }
-            var checking by remember { mutableStateOf(false) }
+            var diagRunning by remember { mutableStateOf(false) }
+            var relayMatch by remember { mutableStateOf<RelayMatchResult?>(null) }
+            var partnerReachable by remember { mutableStateOf<Map<String, Boolean>?>(null) }
+            var partnerStatus by remember { mutableStateOf<PartnerStatus?>(null) }
             val scope = rememberCoroutineScope()
 
             Card(
@@ -434,31 +437,28 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Header + overall connection chip
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Relay Status", style = MaterialTheme.typography.bodyLarge)
+                        Text("Sync Diagnostic", style = MaterialTheme.typography.bodyLarge)
                         AssistChip(
                             onClick = {},
-                            label = {
-                                Text(if (relayConnected) "Connected" else "Disconnected")
-                            },
+                            label = { Text(if (relayConnected) "Connected" else "Disconnected") },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (relayConnected)
                                     MaterialTheme.colorScheme.primaryContainer
-                                else
-                                    MaterialTheme.colorScheme.errorContainer,
+                                else MaterialTheme.colorScheme.errorContainer,
                                 labelColor = if (relayConnected)
                                     MaterialTheme.colorScheme.onPrimaryContainer
-                                else
-                                    MaterialTheme.colorScheme.onErrorContainer
+                                else MaterialTheme.colorScheme.onErrorContainer
                             )
                         )
                     }
 
-                    // Per-relay connection status
+                    // Per-relay connection states (always visible)
                     nostrManager.relayStates().forEach { (url, state) ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -473,14 +473,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                             AssistChip(
                                 onClick = {},
                                 label = {
-                                    Text(
-                                        when (state) {
-                                            RelayState.CONNECTED -> "✓"
-                                            RelayState.CONNECTING -> "…"
-                                            RelayState.ERROR -> "✗"
-                                            RelayState.DISCONNECTED -> "—"
-                                        }
-                                    )
+                                    Text(when (state) {
+                                        RelayState.CONNECTED -> "\u2713"
+                                        RelayState.CONNECTING -> "\u2026"
+                                        RelayState.ERROR -> "\u2717"
+                                        RelayState.DISCONNECTED -> "\u2014"
+                                    })
                                 },
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = when (state) {
@@ -498,257 +496,167 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         }
                     }
 
-                    // Partner reachability check
-                    if (partnerNpubState != null) {
-                        HorizontalDivider()
-                        var relayMatch by remember { mutableStateOf<RelayMatchResult?>(null) }
-                        var matchChecking by remember { mutableStateOf(false) }
-
+                    if (partnerNpubState == null) {
                         Text(
-                            "Partner Reachability",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        if (relayMatch != null) {
-                            // Show relay overlap status
-                            if (relayMatch!!.overlap.isEmpty()) {
-                                Text(
-                                    "⚠ No shared relays! You and your partner are on different relays.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                                Text(
-                                    "Your relays:",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                relayMatch!!.myRelays.forEach { url ->
-                                    Text(
-                                        "  $url",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    "Partner's relays:",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (relayMatch!!.partnerRelays.isEmpty()) {
-                                    Text(
-                                        "  No NIP-65 relay list found",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    relayMatch!!.partnerRelays.forEach { url ->
-                                        Text(
-                                            "  $url",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                Text(
-                                    "Ask your partner to add at least one of your relays to their NIP-65 list, or both use the default relays.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            } else {
-                                Text(
-                                    "✓ ${relayMatch!!.overlap.size} shared relay(s): sync and messaging should work.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                                relayMatch!!.overlap.forEach { url ->
-                                    Text(
-                                        "  ✓ $url",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                matchChecking = true
-                                relayMatch = null
-                                scope.launch {
-                                    relayMatch = nostrManager.checkPartnerRelayMatch()
-                                    matchChecking = false
-                                }
-                            },
-                            enabled = !matchChecking && relayConnected,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (matchChecking) "Checking…" else "Check Relay Match")
-                        }
-
-                        if (relayCheckResult != null) {
-                            HorizontalDivider()
-                            Text(
-                                "Data on shared relays:",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            relayCheckResult!!.forEach { (url, reachable) ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = url.removePrefix("wss://"),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                    AssistChip(
-                                        onClick = {},
-                                        label = {
-                                            Text(if (reachable) "Found" else "No data")
-                                        },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = if (reachable)
-                                                MaterialTheme.colorScheme.primaryContainer
-                                            else
-                                                MaterialTheme.colorScheme.errorContainer,
-                                            labelColor = if (reachable)
-                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                            else
-                                                MaterialTheme.colorScheme.onErrorContainer
-                                        )
-                                    )
-                                }
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                checking = true
-                                relayCheckResult = null
-                                scope.launch {
-                                    relayCheckResult = nostrManager.checkPartnerReachable()
-                                    checking = false
-                                }
-                            },
-                            enabled = !checking && relayConnected,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (checking) "Checking…" else "Check Partner Data")
-                        }
-                    } else {
-                        Text(
-                            "Set partner npub to check reachability.",
+                            "Set partner npub to run a full diagnostic.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            }
-        }
 
-        // ─── Partner Status ─────────────────────────────
-        item {
-            var statusChecking by remember { mutableStateOf(false) }
-            var partnerStatus by remember { mutableStateOf<PartnerStatus?>(null) }
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
+                    // Single button to run all checks
+                    Button(
+                        onClick = {
+                            diagRunning = true
+                            relayMatch = null
+                            partnerReachable = null
+                            partnerStatus = null
+                            scope.launch {
+                                // Run all three checks in parallel
+                                val matchDef = async { nostrManager.checkPartnerRelayMatch() }
+                                val reachDef = async { nostrManager.checkPartnerReachable() }
+                                val statusDef = async { nostrManager.checkPartnerStatus() }
+                                relayMatch = matchDef.await()
+                                partnerReachable = reachDef.await()
+                                partnerStatus = statusDef.await()
+                                diagRunning = false
+                            }
+                        },
+                        enabled = !diagRunning && relayConnected && partnerNpubState != null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (diagRunning) "Checking\u2026 (5s)" else "Run Diagnostic")
+                    }
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "Partner Status",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    if (partnerNpubState == null) {
-                        Text(
-                            "No partner configured.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Button(
-                            onClick = {
-                                statusChecking = true
-                                partnerStatus = null
-                                scope.launch {
-                                    partnerStatus = nostrManager.checkPartnerStatus()
-                                    statusChecking = false
-                                }
-                            },
-                            enabled = !statusChecking && relayConnected,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(if (statusChecking) "Checking… (5s)" else "Check Partner Status")
+                    // Relay overlap
+                    if (relayMatch != null) {
+                        HorizontalDivider()
+                        Text("Relay Match", style = MaterialTheme.typography.bodyLarge)
+                        if (relayMatch!!.overlap.isEmpty()) {
+                            Text(
+                                "\u26a0 No shared relays \u2014 you and your partner are on different relays.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                "Your relays: ${relayMatch!!.myRelays.joinToString { it.removePrefix("wss://") }}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (relayMatch!!.partnerRelays.isEmpty()) {
+                                Text(
+                                    "Partner: no NIP-65 relay list found",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Text(
+                                    "Partner: ${relayMatch!!.partnerRelays.joinToString { it.removePrefix("wss://") }}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Text(
+                                "\u2713 ${relayMatch!!.overlap.size} shared relay(s)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            relayMatch!!.overlap.forEach { url ->
+                                Text(
+                                    "  \u2713 ${url.removePrefix("wss://")}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
+                    }
 
-                        if (partnerStatus != null) {
-                            Spacer(Modifier.height(12.dp))
-                            when (val status = partnerStatus!!) {
-                                is PartnerStatus.Mutual -> {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("✓ ", color = MaterialTheme.colorScheme.primary)
-                                        Text(
-                                            "Mutual — your partner has you configured. Data should sync.",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                }
-                                is PartnerStatus.HasDifferentPartner -> {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("⚠ ", color = MaterialTheme.colorScheme.error)
-                                        Text(
-                                            "Your partner runs Infans but does NOT have you as their partner. " +
-                                                "They may have removed you or set a different npub.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
-                                        )
-                                    }
-                                }
-                                is PartnerStatus.NoInfansData -> {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("? ", color = MaterialTheme.colorScheme.tertiary)
-                                        Text(
-                                            "No Infans data found for this npub on your relays. " +
-                                                "They may not be running Infans, or use different relays.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                is PartnerStatus.NoPartner -> {
+                    // Partner data on relays
+                    if (partnerReachable != null) {
+                        HorizontalDivider()
+                        Text("Partner Data on Relays", style = MaterialTheme.typography.bodyLarge)
+                        partnerReachable!!.forEach { (url, reachable) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = url.removePrefix("wss://"),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text(if (reachable) "Found" else "No data") },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = if (reachable)
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.errorContainer,
+                                        labelColor = if (reachable)
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Partner status
+                    if (partnerStatus != null) {
+                        HorizontalDivider()
+                        Text("Partner Status", style = MaterialTheme.typography.bodyLarge)
+                        when (val status = partnerStatus!!) {
+                            is PartnerStatus.Mutual -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("\u2713 ", color = MaterialTheme.colorScheme.primary)
                                     Text(
-                                        "No partner configured.",
+                                        "Mutual \u2014 your partner has you configured. Data should sync.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                            is PartnerStatus.HasDifferentPartner -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("\u26a0 ", color = MaterialTheme.colorScheme.error)
+                                    Text(
+                                        "Your partner runs Infans but does NOT have you as their partner.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            is PartnerStatus.NoInfansData -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("? ", color = MaterialTheme.colorScheme.tertiary)
+                                    Text(
+                                        "No Infans data found. They may not be running Infans, or use different relays.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
+                            is PartnerStatus.NoPartner -> {
+                                Text(
+                                    "No partner configured.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-
         // ─── Reminders ───────────────────────────────────
         item {
             SectionHeader("Reminders")
@@ -1128,7 +1036,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Check Forgejo for new versions and install them automatically.",
+                        "Check GitHub for new versions and install them automatically.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1260,7 +1168,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "The APK will be downloaded from your Forgejo server and installed.",
+                                "The APK will be downloaded from GitHub and installed.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1397,7 +1305,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
-                        "A privacy-first baby tracking app with Nostr-based encrypted backup and parent-to-parent messaging.",
+                        "A privacy-first baby tracking app with Nostr-based encrypted backup and parent-to-parent sync.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

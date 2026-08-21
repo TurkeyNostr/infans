@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -30,7 +30,7 @@ class BabyRepository(context: Context) {
     private val sleepDao = db.sleepDao()
     private val weightDao = db.weightDao()
     private val milestoneDao = db.milestoneDao()
-    private val chatDao = db.chatMessageDao()
+    private val noteDao = db.noteDao()
     private val diaperDao = db.diaperDao()
     private val pumpingDao = db.pumpingDao()
     private val healthRecordDao = db.healthRecordDao()
@@ -46,6 +46,8 @@ class BabyRepository(context: Context) {
     fun feedings(childId: String): Flow<List<Feeding>> = feedingDao.getByChild(childId)
     suspend fun saveFeeding(f: Feeding) = feedingDao.insert(f)
     suspend fun updateFeedingTime(id: String, time: Long) = feedingDao.updateTime(id, time)
+    suspend fun updateFeedingFields(id: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?) =
+        feedingDao.updateFields(id, amount, unit, breastSide, duration, note)
     suspend fun deleteFeeding(id: String) = feedingDao.delete(id)
     suspend fun allFeedings(): List<Feeding> = feedingDao.getAll()
 
@@ -71,12 +73,12 @@ class BabyRepository(context: Context) {
     suspend fun deleteMilestone(id: String) = milestoneDao.delete(id)
     suspend fun allMilestones(): List<Milestone> = milestoneDao.getAll()
 
-    // ── Chat messages ─────────────────────────────────
-    fun messages(): Flow<List<ChatMessage>> = chatDao.getAll()
-    suspend fun saveMessage(msg: ChatMessage) = chatDao.insert(msg)
-    suspend fun messageExists(id: String): Boolean = chatDao.exists(id) > 0
-    suspend fun markMessageRead(id: String) = chatDao.markRead(id)
-    fun unreadCount(): Flow<Int> = chatDao.unreadCount()
+    // ── Notes ──────────────────────────────────────────
+    fun notes(): Flow<List<Note>> = noteDao.getAll()
+    suspend fun saveNote(note: Note) = noteDao.insert(note)
+    suspend fun noteExists(id: String): Boolean = noteDao.exists(id) > 0
+    suspend fun deleteNote(note: Note) = noteDao.delete(note)
+    suspend fun allNotes(): List<Note> = noteDao.getAllList()
 
     // ── Diapers ──────────────────────────────────────
     fun diapers(childId: String): Flow<List<Diaper>> = diaperDao.getByChild(childId)
@@ -102,7 +104,7 @@ class BabyRepository(context: Context) {
     // ── Backup / restore helpers ──────────────────────
     suspend fun collectAllData(): BackupPayload {
         return BackupPayload(
-            version = 2,
+            version = 3,
             exportedAt = System.currentTimeMillis(),
             children = childDao.getAll().first(),
             feedings = feedingDao.getAll(),
@@ -111,7 +113,8 @@ class BabyRepository(context: Context) {
             milestones = milestoneDao.getAll(),
             diapers = diaperDao.getAll(),
             pumpings = pumpingDao.getAll(),
-            healthRecords = healthRecordDao.getAll()
+            healthRecords = healthRecordDao.getAll(),
+            notes = noteDao.getAllList()
         )
     }
 }
@@ -121,7 +124,7 @@ class BabyRepository(context: Context) {
  */
 @kotlinx.serialization.Serializable
 data class BackupPayload(
-    val version: Int = 2,
+    val version: Int = 3,
     val exportedAt: Long,
     val children: List<Child>,
     val feedings: List<Feeding>,
@@ -130,5 +133,6 @@ data class BackupPayload(
     val milestones: List<Milestone>,
     val diapers: List<Diaper> = emptyList(),
     val pumpings: List<Pumping> = emptyList(),
-    val healthRecords: List<HealthRecord> = emptyList()
+    val healthRecords: List<HealthRecord> = emptyList(),
+    val notes: List<Note> = emptyList()
 )

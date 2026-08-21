@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Feeding
+import com.turkbot.babytracker.ui.components.EditFeedingDialog
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
@@ -59,6 +61,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
     var saveError by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     var editingFeeding by remember { mutableStateOf<Feeding?>(null) }
+    var editingFeedingFields by remember { mutableStateOf<Feeding?>(null) }
 
     LaunchedEffect(saveError) {
         saveError?.let {
@@ -270,7 +273,8 @@ fun FeedScreen(viewModel: BabyViewModel) {
                 FeedingCard(
                     feeding = feeding,
                     onDelete = { viewModel.deleteFeeding(feeding.id) },
-                    onEditTime = { editingFeeding = feeding }
+                    onEditTime = { editingFeeding = feeding },
+                    onEditFields = { editingFeedingFields = feeding }
                 )
             }
         }
@@ -286,6 +290,17 @@ fun FeedScreen(viewModel: BabyViewModel) {
                 }
             )
         }
+        // ── Edit quantity dialog ───────────────────────────
+        editingFeedingFields?.let { feeding ->
+            EditFeedingDialog(
+                feeding = feeding,
+                onDismiss = { editingFeedingFields = null },
+                onSave = { amount, unit, breastSide, duration, note ->
+                    viewModel.updateFeedingFields(feeding.id, amount, unit, breastSide, duration, note)
+                    editingFeedingFields = null
+                }
+            )
+        }
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -297,7 +312,8 @@ fun FeedScreen(viewModel: BabyViewModel) {
 private fun FeedingCard(
     feeding: Feeding,
     onDelete: () -> Unit,
-    onEditTime: () -> Unit
+    onEditTime: () -> Unit,
+    onEditFields: () -> Unit
 ) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val displayAmount = when (feeding.type) {
@@ -356,6 +372,13 @@ private fun FeedingCard(
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = "Edit time",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onEditFields) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = "Edit amount",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

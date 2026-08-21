@@ -23,7 +23,7 @@ import java.util.Locale
 object DebugLogger {
 
     enum class Level { INFO, WARN, ERROR }
-    enum class Category { RELAY, SYNC, AMBER, DM, NIP05, GENERAL }
+    enum class Category { RELAY, SYNC, AMBER, NIP05, GENERAL }
 
     data class Entry(
         val timestamp: Long,

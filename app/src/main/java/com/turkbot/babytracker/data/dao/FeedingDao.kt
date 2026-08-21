@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -29,6 +29,9 @@ interface FeedingDao {
 
     @Query("UPDATE feedings SET time = :time WHERE id = :id")
     suspend fun updateTime(id: String, time: Long)
+
+    @Query("UPDATE feedings SET amount = :amount, unit = :unit, breastSide = :breastSide, duration = :duration, note = :note WHERE id = :id")
+    suspend fun updateFields(id: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?)
 
     @Query("DELETE FROM feedings WHERE id = :id")
     suspend fun delete(id: String)

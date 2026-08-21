@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent sync.
+ * and parent-to-parent notes.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -13,23 +13,23 @@
 package com.turkbot.babytracker.data.dao
 
 import androidx.room.*
-import com.turkbot.babytracker.data.entities.Child
+import com.turkbot.babytracker.data.entities.Note
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ChildDao {
-    @Query("SELECT * FROM children ORDER BY createdAt")
-    fun getAll(): Flow<List<Child>>
-
-    @Query("SELECT * FROM children WHERE id = :id")
-    suspend fun getById(id: String): Child?
+interface NoteDao {
+    @Query("SELECT * FROM notes ORDER BY createdAt ASC")
+    fun getAll(): Flow<List<Note>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(child: Child)
+    suspend fun insert(note: Note)
 
-    @Update
-    suspend fun update(child: Child)
+    @Query("SELECT COUNT(*) FROM notes WHERE id = :id")
+    suspend fun exists(id: String): Int
 
     @Delete
-    suspend fun delete(child: Child)
+    suspend fun delete(note: Note)
+
+    @Query("SELECT * FROM notes")
+    suspend fun getAllList(): List<Note>
 }

@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -46,7 +46,7 @@ class RelaySyncService : Service() {
                 "Infans Sync",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps Nostr relay connection alive for messages"
+                description = "Keeps Nostr relay connection alive for data sync"
             }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }

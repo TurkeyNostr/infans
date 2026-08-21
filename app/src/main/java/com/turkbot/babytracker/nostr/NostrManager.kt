@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -14,7 +14,6 @@ package com.turkbot.babytracker.nostr
 
 import android.content.Context
 import android.util.Log
-import com.turkbot.babytracker.data.entities.ChatMessage
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
 import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.data.repo.BabyRepository
@@ -28,13 +27,11 @@ import com.turkbot.babytracker.nostr.crypto.SecureKeyStore
 import com.turkbot.babytracker.nostr.crypto.SignerMode
 import com.turkbot.babytracker.nostr.events.BackupService
 import com.turkbot.babytracker.nostr.events.NostrEvent
-import com.turkbot.babytracker.nostr.messaging.GiftWrapMessaging
 import com.turkbot.babytracker.nostr.nip05.Nip05Resolver
 import com.turkbot.babytracker.nostr.relay.RelayEvent
 import com.turkbot.babytracker.nostr.relay.RelayPool
 import com.turkbot.babytracker.nostr.relay.RelayState
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -44,14 +41,14 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /**
- * Central Nostr manager — owns the relay pool, signer, backup service, and messaging.
+ * Central Nostr manager — owns the relay pool, signer, backup service, and partner sync.
  *
  * Two signer modes:
  *   - LOCAL: private key stored in EncryptedSharedPreferences (SecureKeyStore)
  *   - AMBER: private key held by the Amber app (NIP-55); signing/encrypt via Intents
  *
  * Both modes produce a [NostrSigner] that the rest of the app uses uniformly.
- * Handles incoming gift-wrapped DMs and encrypted backups.
+ * Handles incoming encrypted backups and partner sync events.
  *
  * Relay management:
  *   - Default relays are used until the user's NIP-65 (kind 10002) relay list is fetched.
@@ -84,7 +81,6 @@ class NostrManager(context: Context) {
 
     val relayPool = RelayPool(effectiveRelays, httpClient)
     private val backupService = BackupService(appContext, relayPool)
-    private val messaging = GiftWrapMessaging(relayPool)
     val nip05Resolver = Nip05Resolver(httpClient, relayPool)
 
     private val _signer = MutableStateFlow<NostrSigner?>(null)
@@ -149,19 +145,11 @@ class NostrManager(context: Context) {
     private val inflightEvents = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     /** Serializes ALL Amber signer operations (encrypt, sign, decrypt) to
-     *  prevent prompt interleaving between exports, DM sends, and incoming
-     *  event handlers. Without this, a relay echoing back our just-published
-     *  backup triggers a decrypt prompt mid-export — the user approves the
-     *  wrong operation and the partner-sync event is silently lost. */
+     *  prevent prompt interleaving between exports and incoming event handlers.
+     *  Without this, a relay echoing back our just-published backup triggers
+     *  a decrypt prompt mid-export — the user approves the wrong operation
+     *  and the partner-sync event is silently lost. */
     private val amberMutex = Mutex()
-
-    /** Serializes incoming DM processing: only ONE gift-wrap is decrypted at a
-     *  time. Without this, 20 historical DMs from a reconnect each launch a
-     *  parallel scope.launch that all race to AmberBridge's mutex, burying a
-     *  user-initiated send behind 40 queued decrypt prompts ("amber storm").
-     *  Events are enqueued by the collector and drained by a single consumer. */
-    private val dmQueue = Channel<RelayEvent>(Channel.UNLIMITED)
-    private var dmQueueJob: Job? = null
 
     /** Wall-clock seconds of our most recent self-backup publish. Used to
      *  skip the relay's echo of our own just-published event — decrypting
@@ -182,6 +170,12 @@ class NostrManager(context: Context) {
      *  immediately instead of hanging forever. */
     private var pendingDeferred: CompletableDeferred<Boolean>? = null
 
+    /** True when data has been saved but not yet successfully exported to
+     *  relays. Set by exportBackup(), cleared on successful publish. A
+     *  background watchdog uses this to retry after relay reconnection. */
+    @Volatile
+    private var exportDirty = false
+
     /** The active event-collector job. Cancelled and replaced every time
      *  connectAndSubscribe() is called (e.g. identity switch from local to
      *  Amber). Without this, two collectors process the same relay events —
@@ -189,9 +183,12 @@ class NostrManager(context: Context) {
      *  the new signer from ever decrypting them. */
     private var eventCollectJob: Job? = null
 
+    /** Background watchdog that retries failed exports after relay
+     *  reconnection. Cancelled in shutdown() and replaced on reconnect. */
+    private var exportWatchdogJob: Job? = null
+
     companion object {
         private const val TAG = "NostrManager"
-        const val SUB_DMS = "baby_dm_sub"
         const val SUB_BACKUP = "baby_backup_sub"
         const val SUB_NIP65 = "nip65_relay_sub"
         const val SUB_PARTNER_SYNC = "partner_sync_sub"
@@ -446,15 +443,6 @@ class NostrManager(context: Context) {
             relayPool.events.collect { wrapper ->
                 try {
                     when (wrapper.event.kind) {
-                        GiftWrapMessaging.KIND_GIFT_WRAP -> {
-                            if (wrapper.subscriptionId == SUB_DMS) {
-                                // Enqueue for serial processing — the DM queue
-                                // consumer drains one at a time so a burst of
-                                // historical DMs doesn't bury a user-initiated
-                                // send behind 40 queued Amber decrypt prompts.
-                                dmQueue.trySend(wrapper.event)
-                            }
-                        }
                         BackupService.BACKUP_KIND -> {
                             when (wrapper.subscriptionId) {
                                 SUB_BACKUP -> {
@@ -487,33 +475,26 @@ class NostrManager(context: Context) {
         // Now connect and subscribe — the collector is already listening
         relayPool.connect()
 
-        // Start the DM queue consumer — processes one gift-wrap at a time so
-        // a burst of historical DMs doesn't bury a user-initiated send behind
-        // 40 queued Amber decrypt prompts.
-        dmQueueJob?.cancel()
-        dmQueueJob = scope.launch {
-            for (event in dmQueue) {
-                handleIncomingDM(event, signer)
+        // Start a dirty-export watchdog: if data was saved but the export
+        // failed (relays were down), retry every 30 seconds once relays
+        // reconnect. This catches the case where a user enters data while
+        // disconnected — the 15-second wait in exportBackup() may time out,
+        // but the watchdog will push it once connectivity returns.
+        exportWatchdogJob?.cancel()
+        exportWatchdogJob = scope.launch {
+            while (isActive) {
+                delay(30_000)
+                if (exportDirty && relayPool.anyConnected.value) {
+                    val s = _signer.value ?: continue
+                    Dbg.info(Cat.SYNC, "Watchdog: dirty export pending, retrying")
+                    val ok = amberMutex.withLock {
+                        lastSelfExportTime = System.currentTimeMillis() / 1000
+                        _exportBackupLocked(s)
+                    }
+                    if (ok) exportDirty = false
+                }
             }
         }
-
-        // Subscribe to gift-wrapped DMs (kind 1059) addressed to us.
-        // Gift-wrap timestamps are randomized up to 2 days in the past (NIP-17
-        // privacy requirement), so we use a 'since' filter set 2 days BEFORE
-        // our last-seen DM time — this avoids re-decrypting all 20 historical
-        // DMs on every reconnect (40 Amber prompts = "amber storm") while
-        // still catching any new message whose randomized timestamp falls
-        // in the safety margin. Dedup is handled client-side via
-        // repo.messageExists() + inflightEvents + keyStore.isEventProcessed().
-        val lastDmTime = keyStore.getLastDmTime()
-        val dmFilter = if (lastDmTime > 0) {
-            val sinceWithMargin = lastDmTime - 172800 // 2 days in seconds
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"since":$sinceWithMargin,"limit":20}"""
-        } else {
-            """{"kinds":[1059],"#p":["$myPubkeyHex"],"limit":20}"""
-        }
-        relayPool.subscribe(SUB_DMS, dmFilter)
-        Dbg.info(Cat.RELAY, "Subscribed to DMs${if (lastDmTime > 0) " (since=${lastDmTime - 172800} with 2-day gift-wrap margin)" else " (full history — first launch)"}")
 
         // Subscribe to our own encrypted backups (kind 30078 authored by us,
         // d-tag = "baby-tracker-backup"). Filtering by #d server-side avoids
@@ -748,76 +729,6 @@ class NostrManager(context: Context) {
     }
 
     /**
-     * Decrypt and store an incoming gift-wrapped DM.
-     *
-     * Skips messages already in the DB (by event ID) to avoid redundant Amber
-     * decrypt prompts on reconnect. With Amber as signer, each decrypt launches
-     * an Activity, so dedup is critical to prevent prompt storms.
-     */
-    private suspend fun handleIncomingDM(event: RelayEvent, signer: NostrSigner) {
-        // Skip already-stored messages — avoids redundant Amber decrypt prompts
-        if (repo.messageExists(event.id)) {
-            Log.d(TAG, "DM ${event.id.take(12)} already stored — skipping")
-            Dbg.info(Cat.DM, "DM already stored — skipping decrypt")
-            return
-        }
-        // Skip events we already attempted — failed decrypts must NOT retry,
-        // otherwise a rejected Amber prompt or non-partner gift wrap loops
-        // forever as each of 3 relays re-delivers the same event.
-        if (keyStore.isEventProcessed(event.id)) {
-            Log.d(TAG, "DM ${event.id.take(12)} already processed — skipping")
-            Dbg.info(Cat.DM, "DM already processed — skipping")
-            return
-        }
-        // Prevent duplicate decrypts when 3 relays return the same event
-        if (!inflightEvents.add(event.id)) {
-            Log.d(TAG, "DM ${event.id.take(12)} already being decrypted — skipping")
-            Dbg.info(Cat.DM, "DM already being decrypted — skipping")
-            return
-        }
-        try {
-            // Get expected partner hex for early sender filtering. If partner is not
-            // configured, skip all DMs — no point decrypting messages we'll reject.
-            val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
-            if (expectedPartnerHex == null) {
-                Log.w(TAG, "DM received but no partner npub configured — ignoring")
-                Dbg.warn(Cat.DM, "DM received but no partner configured — ignoring")
-                return
-            }
-
-            // unwrapGiftWrap does 2 sequential Amber nip44_decrypt calls.
-            // AmberBridge already serializes all Amber calls via its own mutex,
-            // so we do NOT hold amberMutex here — otherwise incoming decrypts
-            // block user-initiated sends/exports behind a queue of Amber prompts.
-            val unwrapped = messaging.unwrapGiftWrap(event, signer, expectedPartnerHex) ?: return
-
-            if (unwrapped.senderPubkeyHex != expectedPartnerHex) {
-                Log.w(TAG, "DM from non-partner pubkey — ignoring")
-                Dbg.warn(Cat.DM, "DM from non-partner sender — ignoring")
-                return
-            }
-
-            val chatMsg = ChatMessage(
-                id = event.id,
-                senderPubkey = unwrapped.senderPubkeyHex,
-                senderNpub = unwrapped.senderNpub,
-                content = unwrapped.content,
-                createdAt = unwrapped.createdAt
-            )
-            repo.saveMessage(chatMsg)
-            Log.d(TAG, "Stored DM from partner")
-            Dbg.info(Cat.DM, "DM received from partner — stored")
-
-            keyStore.saveLastDmTime(System.currentTimeMillis() / 1000)
-        } finally {
-            // Mark as processed regardless of outcome — failed decrypts must
-            // not retry on the next relay delivery, or we get a prompt storm.
-            keyStore.markEventProcessed(event.id)
-            inflightEvents.remove(event.id)
-        }
-    }
-
-    /**
      * Decrypt and restore a backup event.
      * Only processes events with d-tag = BACKUP_D_TAG (our self-backup).
      * The relay subscription already filters by #d, but we check client-side
@@ -944,6 +855,7 @@ class NostrManager(context: Context) {
         payload.diapers.forEach { repo.saveDiaper(it) }
         payload.pumpings.forEach { repo.savePumping(it) }
         payload.healthRecords.forEach { repo.saveHealthRecord(it) }
+        payload.notes.forEach { repo.saveNote(it) }
     }
 
     /**
@@ -966,6 +878,7 @@ class NostrManager(context: Context) {
      */
     suspend fun exportBackup(): Boolean {
         val signer = _signer.value ?: return false
+        exportDirty = true
 
         // Cancel any pending debounced export and start a new timer.
         // This coalesces rapid calls into one export after 2 seconds of quiet.
@@ -981,11 +894,14 @@ class NostrManager(context: Context) {
         pendingExportJob = scope.launch {
             delay(2_000) // 2-second debounce window
             try {
-                // Check relay connectivity at fire-time, not call-time.
-                // If checked at call-time, exports during early launch (relays
-                // still connecting) would be silently dropped with no retry.
-                if (!relayPool.anyConnected.value) {
-                    Dbg.warn(Cat.SYNC, "Skipping export — no relays connected")
+                // Wait up to 15 seconds for at least one relay to connect.
+                // Previously this dropped the export silently if no relay was
+                // connected at fire-time — data was lost until a manual
+                // backup. Now we wait, and if it still times out, the dirty
+                // watchdog will retry once relays come back.
+                val connected = waitForRelay(timeoutMs = 15_000)
+                if (!connected) {
+                    Dbg.warn(Cat.SYNC, "No relays connected after 15s — export deferred to watchdog")
                     deferred.complete(false)
                     return@launch
                 }
@@ -993,12 +909,23 @@ class NostrManager(context: Context) {
                     lastSelfExportTime = System.currentTimeMillis() / 1000
                     _exportBackupLocked(signer)
                 }
+                if (result) exportDirty = false
                 deferred.complete(result)
             } catch (e: Exception) {
                 deferred.complete(false)
             }
         }
         return deferred.await()
+    }
+
+    /** Wait up to [timeoutMs] for at least one relay to reach CONNECTED state. */
+    private suspend fun waitForRelay(timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (relayPool.anyConnected.value) return true
+            delay(500)
+        }
+        return relayPool.anyConnected.value
     }
 
     private suspend fun _exportBackupLocked(signer: NostrSigner): Boolean {
@@ -1096,37 +1023,13 @@ class NostrManager(context: Context) {
     }
 
     /**
-     * Send a DM to the other parent.
-     * Only allows sending to the configured partner npub — blocks sends to
-     * arbitrary recipients to prevent accidental data leakage.
-     */
-    suspend fun sendMessage(text: String, recipientNpub: String): Boolean {
-        val signer = _signer.value ?: return false
-        Dbg.info(Cat.DM, "Send button pressed — sending message")
-
-        // Enforce partner-only messaging
-        val configuredPartner = _partnerNpub.value
-        if (configuredPartner == null || configuredPartner != recipientNpub.trim()) {
-            Log.w(TAG, "Blocked send to non-partner recipient — only the configured partner is allowed")
-            Dbg.warn(Cat.DM, "Blocked send to non-partner recipient")
-            return false
-        }
-
-        // Serialize with all other Amber operations (exports, incoming handlers)
-        return amberMutex.withLock {
-            messaging.sendDirectMessage(text, signer, recipientNpub)
-        }
-    }
-
-    /**
      * Disconnect everything.
      */
     fun shutdown() {
         pendingExportJob?.cancel()
         pendingDeferred?.cancel()
         eventCollectJob?.cancel()
-        dmQueueJob?.cancel()
-        dmQueue.close()
+        exportWatchdogJob?.cancel()
         relayPool.disconnect()
         scope.cancel()
     }

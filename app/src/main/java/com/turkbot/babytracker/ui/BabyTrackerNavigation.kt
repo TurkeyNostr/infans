@@ -2,7 +2,7 @@
  * Baby Tracker — Native Android (Kotlin)
  *
  * A privacy-first baby tracking app with Nostr-based encrypted storage
- * and parent-to-parent messaging.
+ * and parent-to-parent sync.
  *
  * Copyright (c) 2026 Turkey
  *
@@ -14,8 +14,8 @@ package com.turkbot.babytracker.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.automirrored.outlined.Message
+import androidx.compose.material.icons.automirrored.filled.Note
+import androidx.compose.material.icons.automirrored.outlined.Note
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.MonitorWeight
@@ -52,8 +52,8 @@ import com.turkbot.babytracker.ui.screens.ChartsScreen
 import com.turkbot.babytracker.ui.screens.DiaperScreen
 import com.turkbot.babytracker.ui.screens.FeedScreen
 import com.turkbot.babytracker.ui.screens.HealthScreen
-import com.turkbot.babytracker.ui.screens.MessagesScreen
 import com.turkbot.babytracker.ui.screens.MilestonesScreen
+import com.turkbot.babytracker.ui.screens.NotesScreen
 import com.turkbot.babytracker.ui.screens.PumpingScreen
 import com.turkbot.babytracker.ui.screens.SettingsScreen
 import com.turkbot.babytracker.ui.screens.SleepScreen
@@ -72,7 +72,7 @@ sealed class Screen(
     data object Sleep : Screen("sleep", "Sleep", Icons.Filled.Bedtime, Icons.Outlined.Bedtime)
     data object Weight : Screen("weight", "Weight", Icons.Filled.MonitorWeight, Icons.Outlined.MonitorWeight)
     data object Summary : Screen("summary", "Home", Icons.Filled.Dashboard, Icons.Outlined.Dashboard)
-    data object Messages : Screen("messages", "Messages", Icons.AutoMirrored.Filled.Message, Icons.AutoMirrored.Outlined.Message)
+    data object Notes : Screen("notes", "Notes", Icons.AutoMirrored.Filled.Note, Icons.AutoMirrored.Outlined.Note)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,7 +83,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
 
     // Summary is the start destination — it's the dashboard/home
     val screens = listOf(
-        Screen.Summary, Screen.Feed, Screen.Sleep, Screen.Weight, Screen.Messages
+        Screen.Summary, Screen.Feed, Screen.Sleep, Screen.Weight, Screen.Notes
     )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -175,7 +175,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             composable("diaper") { DiaperScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable("pumping") { PumpingScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable("health") { HealthScreen(viewModel, onSaved = { navController.popBackStack() }) }
-            composable(Screen.Messages.route) { MessagesScreen(viewModel, app.nostrManager) }
+            composable(Screen.Notes.route) { NotesScreen(viewModel, app.nostrManager) }
             composable("settings") { SettingsScreen(viewModel, app.nostrManager) }
         }
     }
