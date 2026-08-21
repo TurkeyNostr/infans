@@ -365,6 +365,10 @@ class BabyViewModel(
     }
 
     // ── Reminders ──────────────────────────────────────
+    private val reminderPrefs = app.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
+
+    val reminderInterval: MutableStateFlow<Int> = MutableStateFlow(reminderPrefs.getInt("reminder_interval", 0))
+
     fun setReminderInterval(minutes: Int) {
         viewModelScope.launch {
             if (minutes > 0) {
@@ -372,8 +376,8 @@ class BabyViewModel(
             } else {
                 ReminderScheduler.cancel(app)
             }
-            app.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
-                .edit().putInt("reminder_interval", minutes).apply()
+            reminderPrefs.edit().putInt("reminder_interval", minutes).apply()
+            reminderInterval.value = minutes
         }
     }
 

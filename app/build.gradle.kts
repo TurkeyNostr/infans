@@ -14,8 +14,8 @@ android {
         applicationId = "com.turkbot.babytracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 43
-        versionName = "1.9.0"
+        versionCode = 44
+        versionName = "1.9.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -101,9 +101,6 @@ dependencies {
     // EncryptedSharedPreferences for secure key storage
     implementation(libs.security.crypto)
 
-    // DataStore for preferences
-    implementation(libs.datastore.preferences)
-
-    // WorkManager for background sync
+    // WorkManager for feeding reminders
     implementation(libs.work.runtime.ktx)
 }

@@ -1368,6 +1368,87 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             }
         }
 
+        // ─── Feeding Reminders ─────────────────────────────
+        item {
+            Spacer(Modifier.height(16.dp))
+            SectionHeader("Feeding Reminders")
+        }
+
+        item {
+            val reminderInterval by viewModel.reminderInterval.collectAsState()
+            var reminderEnabled by remember { mutableStateOf(reminderInterval > 0) }
+            var selectedInterval by remember(reminderInterval) {
+                mutableStateOf(if (reminderInterval > 0) reminderInterval else 150)
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Feeding Reminder",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Get a notification reminding you to feed baby at regular intervals.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Enable reminder")
+                        Switch(
+                            checked = reminderEnabled,
+                            onCheckedChange = { enabled ->
+                                reminderEnabled = enabled
+                                if (enabled) {
+                                    viewModel.setReminderInterval(selectedInterval)
+                                } else {
+                                    viewModel.setReminderInterval(0)
+                                }
+                            }
+                        )
+                    }
+                    if (reminderEnabled) {
+                        HorizontalDivider()
+                        Text(
+                            "Interval",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val intervals = listOf(
+                            90 to "1.5h",
+                            120 to "2h",
+                            150 to "2.5h",
+                            180 to "3h",
+                            240 to "4h"
+                        )
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            intervals.forEachIndexed { index, (mins, label) ->
+                                SegmentedButton(
+                                    selected = selectedInterval == mins,
+                                    onClick = {
+                                        selectedInterval = mins
+                                        viewModel.setReminderInterval(mins)
+                                    },
+                                    shape = SegmentedButtonDefaults.itemShape(index, intervals.size)
+                                ) {
+                                    Text(label)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ─── About ────────────────────────────────────────
         item {
             Spacer(Modifier.height(16.dp))
