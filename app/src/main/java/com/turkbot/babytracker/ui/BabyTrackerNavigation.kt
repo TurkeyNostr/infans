@@ -54,11 +54,16 @@ import com.turkbot.babytracker.ui.screens.FeedScreen
 import com.turkbot.babytracker.ui.screens.HealthScreen
 import com.turkbot.babytracker.ui.screens.MilestonesScreen
 import com.turkbot.babytracker.ui.screens.NotesScreen
+import com.turkbot.babytracker.ui.screens.OnboardingScreen
 import com.turkbot.babytracker.ui.screens.PumpingScreen
 import com.turkbot.babytracker.ui.screens.SettingsScreen
 import com.turkbot.babytracker.ui.screens.SleepScreen
 import com.turkbot.babytracker.ui.screens.SummaryScreen
 import com.turkbot.babytracker.ui.screens.WeightScreen
+import com.turkbot.babytracker.ui.screens.isOnboardingComplete
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModelFactory
 
@@ -80,6 +85,17 @@ sealed class Screen(
 fun BabyTrackerNavigation(app: BabyTrackerApp) {
     val navController = rememberNavController()
     val viewModel: BabyViewModel = viewModel(factory = BabyViewModelFactory(app))
+    val context = LocalContext.current
+    val showOnboarding = remember { mutableStateOf(!isOnboardingComplete(context)) }
+
+    if (showOnboarding.value) {
+        OnboardingScreen(
+            viewModel = viewModel,
+            nostrManager = app.nostrManager,
+            onComplete = { showOnboarding.value = false }
+        )
+        return
+    }
 
     // Summary is the start destination — it's the dashboard/home
     val screens = listOf(
