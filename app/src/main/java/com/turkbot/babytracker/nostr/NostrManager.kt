@@ -901,7 +901,7 @@ class NostrManager(context: Context) {
         payload.pumpings.forEach { repo.savePumping(it) }
         payload.healthRecords.forEach { repo.saveHealthRecord(it) }
         payload.notes.forEach {
-            Dbg.info(Cat.SYNC, "Restoring note ${it.id.take(8)} by ${it.authorPubkey.take(8)}: ${it.content.take(40)}")
+            Dbg.info(Cat.SYNC, "Restoring note ${it.id.take(8)} by ${it.authorPubkey.take(8)} (${it.content.length} chars)")
             repo.saveNote(it)
         }
     }
