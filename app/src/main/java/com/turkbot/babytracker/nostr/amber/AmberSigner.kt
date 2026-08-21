@@ -12,6 +12,7 @@
 
 package com.turkbot.babytracker.nostr.amber
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
@@ -52,7 +53,8 @@ import kotlinx.serialization.json.put
 class AmberSigner(
     override val npub: String,
     private val pubkeyHexStr: String,
-    private val signerPackage: String
+    private val signerPackage: String,
+    private val appContext: Context? = null
 ) : NostrSigner {
 
     override val pubkeyHex: String get() = pubkeyHexStr
@@ -79,9 +81,7 @@ class AmberSigner(
         private const val METHOD_NIP44_DECRYPT = "nip44_decrypt"
 
         // Event kinds this app signs via the external signer:
-        //   13   — NIP-17 seals (gift-wrap DMs)
-        //   30078 — encrypted backups + partner sync
-        private const val KIND_SEAL = 13
+        //   30078 — encrypted backups + partner sync (the only kind we sign)
         private const val KIND_BACKUP = 30078
 
         /**
@@ -90,13 +90,12 @@ class AmberSigner(
          * Per NIP-55, each permission is {type, kind?}:
          *   - sign_event with a kind narrows the signing permission to that kind
          *   - nip44_encrypt / nip44_decrypt are blanket (no kind scoping)
+         *
+         * Approving these at login is what enables the Content Resolver path,
+         * which answers subsequent requests in the background with no prompt.
          */
         private val SCOPED_PERMISSIONS: String = Json.encodeToString(
             buildJsonArray {
-                add(buildJsonObject {
-                    put("type", METHOD_SIGN_EVENT)
-                    put("kind", KIND_SEAL)
-                })
                 add(buildJsonObject {
                     put("type", METHOD_SIGN_EVENT)
                     put("kind", KIND_BACKUP)
@@ -182,11 +181,32 @@ class AmberSigner(
     }
 
     override suspend fun signEvent(unsigned: NostrEvent): NostrEvent {
+        val unsignedJson = unsigned.copy(sig = "").toJsonObject().toString()
+
+        // Silent path first: if the user tapped "remember my choice" in the signer,
+        // this returns the signature with no UI at all (NIP-55 Content Resolver).
+        appContext?.let { ctx ->
+            when (val outcome = AmberContentResolver.signEvent(
+                ctx, signerPackage, unsignedJson, pubkeyHexStr
+            )) {
+                is AmberContentResolver.Outcome.Success -> {
+                    Dbg.info(Cat.AMBER, "Amber: sign_event (kind=${unsigned.kind}) — background, no prompt")
+                    outcome.event?.takeIf { it.isNotBlank() }?.let {
+                        return NostrEvent.fromJson(it)
+                    }
+                    return unsigned.copy(sig = outcome.result)
+                }
+                // Always-reject: per NIP-55, do NOT fall back to an intent.
+                is AmberContentResolver.Outcome.Rejected ->
+                    throw AmberException("User has set always-reject for sign_event")
+                is AmberContentResolver.Outcome.Unavailable -> { /* fall through to intent */ }
+            }
+        }
+
         Dbg.info(Cat.AMBER, "Amber: sign_event (kind=${unsigned.kind}) — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
         }
-        val unsignedJson = unsigned.copy(sig = "").toJsonObject()
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("nostrsigner:$unsignedJson")).apply {
             setPackage(signerPackage)
             putExtra(EXTRA_TYPE, METHOD_SIGN_EVENT)
@@ -214,6 +234,21 @@ class AmberSigner(
     }
 
     override suspend fun nip44Encrypt(plaintext: String, recipientPubkeyHex: String): String {
+        // Silent path first — no signer UI when the permission is remembered.
+        appContext?.let { ctx ->
+            when (val outcome = AmberContentResolver.nip44Encrypt(
+                ctx, signerPackage, plaintext, recipientPubkeyHex, pubkeyHexStr
+            )) {
+                is AmberContentResolver.Outcome.Success -> {
+                    Dbg.info(Cat.AMBER, "Amber: nip44_encrypt — background, no prompt")
+                    return outcome.result
+                }
+                is AmberContentResolver.Outcome.Rejected ->
+                    throw AmberException("User has set always-reject for nip44_encrypt")
+                is AmberContentResolver.Outcome.Unavailable -> { /* fall through to intent */ }
+            }
+        }
+
         Dbg.info(Cat.AMBER, "Amber: nip44_encrypt — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")
@@ -240,6 +275,22 @@ class AmberSigner(
     }
 
     override suspend fun nip44Decrypt(payload: String, senderPubkeyHex: String): String {
+        // Silent path first — this is the hottest operation (fires on every
+        // inbound partner event), so keeping it out of the UI matters most here.
+        appContext?.let { ctx ->
+            when (val outcome = AmberContentResolver.nip44Decrypt(
+                ctx, signerPackage, payload, senderPubkeyHex, pubkeyHexStr
+            )) {
+                is AmberContentResolver.Outcome.Success -> {
+                    Dbg.info(Cat.AMBER, "Amber: nip44_decrypt — background, no prompt")
+                    return outcome.result
+                }
+                is AmberContentResolver.Outcome.Rejected ->
+                    throw AmberException("User has set always-reject for nip44_decrypt")
+                is AmberContentResolver.Outcome.Unavailable -> { /* fall through to intent */ }
+            }
+        }
+
         Dbg.info(Cat.AMBER, "Amber: nip44_decrypt — awaiting user approval")
         if (!AmberBridge.isBound()) {
             throw IllegalStateException("AmberBridge not bound")

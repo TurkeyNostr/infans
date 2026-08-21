@@ -448,15 +448,17 @@ class BabyViewModel(
     }
 
     fun addNote(text: String) {
-        val signer = nostr.signer.value ?: return
         viewModelScope.launch {
+            val signer = nostr.signer.value
             repo.saveNote(Note(
                 id = UUID.randomUUID().toString(),
-                authorPubkey = signer.pubkeyHex,
+                authorPubkey = signer?.pubkeyHex ?: "local",
                 content = text,
                 createdAt = System.currentTimeMillis()
             ))
-            nostr.exportBackup()
+            if (signer != null) {
+                nostr.exportBackup()
+            }
         }
     }
 

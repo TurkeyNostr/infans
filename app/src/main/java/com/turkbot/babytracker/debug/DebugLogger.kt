@@ -34,6 +34,8 @@ object DebugLogger {
 
     private const val MAX_ENTRIES = 500
 
+    private val lock = Any()
+
     private val _entries = MutableStateFlow<List<Entry>>(emptyList())
     val entries: StateFlow<List<Entry>> = _entries
 
@@ -41,12 +43,14 @@ object DebugLogger {
 
     fun log(level: Level, category: Category, message: String) {
         val entry = Entry(System.currentTimeMillis(), level, category, message)
-        val current = _entries.value.toMutableList()
-        current.add(entry)
-        if (current.size > MAX_ENTRIES) {
-            _entries.value = current.takeLast(MAX_ENTRIES)
-        } else {
-            _entries.value = current
+        synchronized(lock) {
+            val current = _entries.value.toMutableList()
+            current.add(entry)
+            if (current.size > MAX_ENTRIES) {
+                _entries.value = current.takeLast(MAX_ENTRIES)
+            } else {
+                _entries.value = current
+            }
         }
     }
 

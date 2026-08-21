@@ -89,8 +89,8 @@ class BackupService(
 
             // 6. Publish to all relays
             relayPool.publish(event.toJsonObject())
-            Log.d(TAG, "Backup published: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
-            Dbg.info(Cat.SYNC, "Self-backup built: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights — publish sent")
+            Log.d(TAG, "Backup published: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.notes.size} notes")
+            Dbg.info(Cat.SYNC, "Self-backup built: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.notes.size} notes — publish sent")
             return true
 
         } catch (e: Exception) {
@@ -203,7 +203,7 @@ class BackupService(
 
             relayPool.publish(event.toJsonObject())
             Log.d(TAG, "Partner sync published to ${partnerPubkeyHex.take(16)}...")
-            Dbg.info(Cat.SYNC, "Partner-sync built: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps — publish sent")
+            Dbg.info(Cat.SYNC, "Partner-sync built: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.notes.size} notes — publish sent")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Partner sync export failed", e)

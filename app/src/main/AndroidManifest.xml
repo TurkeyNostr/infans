@@ -17,6 +17,14 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="nostrsigner" />
         </intent>
+        <!--
+          Content Resolver transport (NIP-55 background signing). Intent visibility
+          alone does NOT grant content provider access on Android 11+, so the known
+          signer packages are declared explicitly. Without these, every query throws
+          SecurityException and the app falls back to a prompt for every operation.
+        -->
+        <package android:name="com.greenart7c3.nostrsigner" />
+        <package android:name="com.greenart7c3.nostrsigner.debug" />
     </queries>
 
     <application

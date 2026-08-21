@@ -154,10 +154,12 @@ class NostrManager(context: Context) {
     /** Wall-clock seconds of our most recent self-backup publish. Used to
      *  skip the relay's echo of our own just-published event — decrypting
      *  it wastes an Amber prompt and risks interleaving with the partner-
-     *  sync export that follows. Zero on a fresh install (cross-device
-     *  restore processes all events). */
+     *  sync export that follows. Initialised to the current time so that
+     *  old self-backups on the relay are not mistaken for echoes on app
+     *  start (which would prevent cross-device restore). Updated to the
+     *  actual export timestamp every time exportBackup() runs. */
     @Volatile
-    private var lastSelfExportTime: Long = 0L
+    private var lastSelfExportTime: Long = System.currentTimeMillis() / 1000
 
     /** Debounce job for exportBackup — coalesces rapid calls into a single
      *  export so the user isn't bombarded with Amber prompts when entering
@@ -216,7 +218,7 @@ class NostrManager(context: Context) {
                 if (npub != null && pkg != null) {
                     val pubHex = npubToHex(npub)
                     if (pubHex != null) {
-                        val signer = AmberSigner(npub, pubHex, pkg)
+                        val signer = AmberSigner(npub, pubHex, pkg, appContext)
                         _signer.value = signer
                         connectAndSubscribe(signer)
                         // Refresh NIP-65 relays in background
@@ -284,7 +286,8 @@ class NostrManager(context: Context) {
             val signer = AmberSigner(
                 npub = loginResult.npub,
                 pubkeyHexStr = loginResult.pubkeyHex,
-                signerPackage = loginResult.signerPackage
+                signerPackage = loginResult.signerPackage,
+                appContext = appContext
             )
             _signer.value = signer
             connectAndSubscribe(signer)
@@ -762,7 +765,7 @@ class NostrManager(context: Context) {
             keyStore.saveLastBackupTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Restored backup: ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps")
-            Dbg.info(Cat.SYNC, "Backup restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
+            Dbg.info(Cat.SYNC, "Backup restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.notes.size} notes")
         } finally {
             // Mark as processed regardless of outcome — failed decrypts must
             // not retry on the next relay delivery, or we get a prompt storm.
@@ -834,7 +837,7 @@ class NostrManager(context: Context) {
             keyStore.saveLastPartnerSyncTime(event.createdAt)
             restoreFromPayload(payload)
             Log.d(TAG, "Partner sync: merged ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps from partner")
-            Dbg.info(Cat.SYNC, "Partner sync restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights")
+            Dbg.info(Cat.SYNC, "Partner sync restored: ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.notes.size} notes")
         } finally {
             // Mark as processed regardless of outcome — failed decrypts must
             // not retry on the next relay delivery, or we get a prompt storm.
@@ -847,6 +850,7 @@ class NostrManager(context: Context) {
      * Restore data from a decrypted backup payload into local Room database.
      */
     private suspend fun restoreFromPayload(payload: BackupPayload) {
+        Dbg.info(Cat.SYNC, "restoreFromPayload: v${payload.version}, ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.diapers.size} diapers, ${payload.pumpings.size} pumpings, ${payload.healthRecords.size} health, ${payload.notes.size} notes")
         payload.children.forEach { repo.saveChild(it) }
         payload.feedings.forEach { repo.saveFeeding(it) }
         payload.sleeps.forEach { repo.saveSleep(it) }
@@ -855,7 +859,10 @@ class NostrManager(context: Context) {
         payload.diapers.forEach { repo.saveDiaper(it) }
         payload.pumpings.forEach { repo.savePumping(it) }
         payload.healthRecords.forEach { repo.saveHealthRecord(it) }
-        payload.notes.forEach { repo.saveNote(it) }
+        payload.notes.forEach {
+            Dbg.info(Cat.SYNC, "Restoring note ${it.id.take(8)} by ${it.authorPubkey.take(8)}: ${it.content.take(40)}")
+            repo.saveNote(it)
+        }
     }
 
     /**
