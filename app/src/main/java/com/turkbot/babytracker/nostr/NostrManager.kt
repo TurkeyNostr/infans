@@ -793,13 +793,11 @@ class NostrManager(context: Context) {
         // event, and re-decrypting triggers a fresh Amber prompt each time.
         if (keyStore.isEventProcessed(event.id)) {
             Log.d(TAG, "Backup event ${event.id.take(12)}… already processed — skipping decrypt")
-            Dbg.info(Cat.SYNC, "Backup event already processed — skipping decrypt")
             return
         }
         // Prevent duplicate decrypts when 3 relays return the same event
         if (!inflightEvents.add(event.id)) {
             Log.d(TAG, "Backup event ${event.id.take(12)}… already being decrypted — skipping")
-            Dbg.info(Cat.SYNC, "Backup event already being decrypted — skipping")
             return
         }
         try {
@@ -840,13 +838,11 @@ class NostrManager(context: Context) {
         // event, and re-decrypting triggers a fresh Amber prompt each time.
         if (keyStore.isEventProcessed(event.id)) {
             Log.d(TAG, "Partner sync event ${event.id.take(12)}… already processed — skipping decrypt")
-            Dbg.info(Cat.SYNC, "Partner sync event already processed — skipping decrypt")
             return
         }
         // Prevent duplicate decrypts when 3 relays return the same event
         if (!inflightEvents.add(event.id)) {
             Log.d(TAG, "Partner sync event ${event.id.take(12)}… already being decrypted — skipping")
-            Dbg.info(Cat.SYNC, "Partner sync event already being decrypted — skipping")
             return
         }
         try {
