@@ -33,7 +33,10 @@ import com.turkbot.babytracker.nostr.relay.RelayPool
 import com.turkbot.babytracker.nostr.relay.RelayState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -172,11 +175,44 @@ class NostrManager(context: Context) {
      *  immediately instead of hanging forever. */
     private var pendingDeferred: CompletableDeferred<Boolean>? = null
 
-    /** True when data has been saved but not yet successfully exported to
+    /** True when data has been saved but not not yet successfully exported to
      *  relays. Set by exportBackup(), cleared on successful publish. A
      *  background watchdog uses this to retry after relay reconnection. */
     @Volatile
     private var exportDirty = false
+
+    /** Toggles whenever exportDirty changes so syncState re-evaluates. */
+    private val _dirtyFlag = MutableStateFlow(false)
+
+    /** UI-visible sync state derived from signer + relay connection + dirty flag.
+     *  - SYNCED: signer present, no dirty data, relays connected
+     *  - PENDING: data saved but not yet exported (debounce or relay down)
+     *  - OFFLINE: no signer (local-only mode) — nothing to sync
+     *  - DISCONNECTED: signer present but no relay connected */
+    enum class SyncState { OFFLINE, DISCONNECTED, PENDING, SYNCED }
+
+    val syncState: StateFlow<SyncState> = combine(
+        _signer,
+        relayPool.anyConnected,
+        _dirtyFlag
+    ) { signer, connected, _ ->
+        when {
+            signer == null -> SyncState.OFFLINE
+            exportDirty -> SyncState.PENDING
+            !connected -> SyncState.DISCONNECTED
+            else -> SyncState.SYNCED
+        }
+    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), SyncState.OFFLINE)
+
+    /** Poll exportDirty (a plain @Volatile, not a flow) so syncState re-emits. */
+    init {
+        scope.launch {
+            while (true) {
+                _dirtyFlag.value = exportDirty
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
 
     /** The active event-collector job. Cancelled and replaced every time
      *  connectAndSubscribe() is called (e.g. identity switch from local to
@@ -319,6 +355,15 @@ class NostrManager(context: Context) {
         keyStore.clear()
         _signer.value = null
         _partnerNpub.value = null
+    }
+
+    /**
+     * Return the nsec (private key) if using a local key.
+     * Returns null for Amber signers — the key lives in Amber, not here.
+     */
+    fun getLocalNsec(): String? {
+        val keys = keyStore.getKeyPair() ?: return null
+        return keys.nsec
     }
 
     /**

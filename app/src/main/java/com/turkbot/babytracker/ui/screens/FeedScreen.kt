@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Feeding
 import com.turkbot.babytracker.ui.components.EditFeedingDialog
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
+import com.turkbot.babytracker.ui.components.LiveTimer
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
@@ -161,6 +162,26 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                     }
                                 }
                             }
+                            // ── Live timer for breastfeeding ──
+                            LiveTimer(label = "Breast") { minutes ->
+                                val saved = viewModel.addFeeding(
+                                    type = "breast",
+                                    amount = null,
+                                    unit = "min",
+                                    breastSide = selectedSide,
+                                    duration = minutes,
+                                    note = null
+                                )
+                                if (!saved) {
+                                    saveError = "No child selected — add a baby first"
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Or enter duration manually:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             OutlinedTextField(
                                 value = durationText,
                                 onValueChange = { durationText = it.filter { c -> c.isDigit() } },

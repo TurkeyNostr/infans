@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Sleep
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
+import com.turkbot.babytracker.ui.components.LiveTimer
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
@@ -86,6 +87,22 @@ fun SleepScreen(viewModel: BabyViewModel) {
                         "Log Sleep Session",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
+                    )
+
+                    // ── Live timer ──
+                    LiveTimer(label = "Sleep") { minutes ->
+                        viewModel.addSleep(
+                            start = System.currentTimeMillis() - minutes * 60_000L,
+                            duration = minutes,
+                            note = null
+                        )
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Or enter manually:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     OutlinedTextField(

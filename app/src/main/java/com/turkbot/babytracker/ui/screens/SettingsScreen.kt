@@ -62,6 +62,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
     var showAddChild by remember { mutableStateOf(false) }
     var showImportKey by remember { mutableStateOf(false) }
+    var showNsec by remember { mutableStateOf(false) }
     var nsecInput by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var amberError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -181,6 +182,67 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(16.dp))
+                        // ── Export private key (local keys only) ──
+                        if (signer!!.type != SignerType.AMBER) {
+                            if (showNsec) {
+                                val nsec = remember(showNsec) { nostrManager.getLocalNsec() }
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            "Your Private Key (nsec)",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Anyone with this key can read your encrypted backups. Store it somewhere safe. Do not share it with anyone.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            nsec ?: "Key not available",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedButton(onClick = {
+                                                if (nsec != null) {
+                                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("nsec", nsec))
+                                                }
+                                            }) { Text("Copy") }
+                                            OutlinedButton(onClick = {
+                                                if (nsec != null) {
+                                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "text/plain"
+                                                        putExtra(Intent.EXTRA_TEXT, nsec)
+                                                    }
+                                                    context.startActivity(Intent.createChooser(shareIntent, "Save nsec"))
+                                                }
+                                            }) { Text("Share") }
+                                            TextButton(onClick = { showNsec = false }) { Text("Hide") }
+                                        }
+                                    }
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { showNsec = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Key, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Show My Private Key")
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                        }
                         OutlinedButton(
                             onClick = { viewModel.clearNostrIdentity() },
                             colors = ButtonDefaults.outlinedButtonColors(

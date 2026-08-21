@@ -237,6 +237,55 @@ fun SummaryScreen(
             }
         }
 
+        // ── Today's totals ─────────────────────────────────
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Today's Totals",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // Total bottle intake (ml)
+                    val totalMl = todayFeedings
+                        .filter { it.type == "bottle" && it.amount != null && it.unit != null }
+                        .sumOf { f -> Units.amountToMl(f.amount!!, f.unit!!) }
+                    val totalBreastMin = todayFeedings
+                        .filter { it.type == "breast" }
+                        .sumOf { it.duration ?: 0 }
+                    val totalSleepMin = todaySleeps.sumOf { it.duration }
+                    val totalDiapers = todayDiapers.size
+
+                    TotalsRow(
+                        icon = Icons.Default.Restaurant,
+                        label = "Feedings",
+                        value = if (todayFeedings.isEmpty()) "—" else {
+                            val parts = mutableListOf<String>()
+                            if (totalMl > 0) parts.add("${totalMl.toInt()} ml")
+                            if (totalBreastMin > 0) parts.add("${totalBreastMin} min breast")
+                            if (parts.isEmpty()) "${todayFeedings.size} session${if (todayFeedings.size > 1) "s" else ""}"
+                            else parts.joinToString(" · ")
+                        }
+                    )
+                    TotalsRow(
+                        icon = Icons.Default.Bedtime,
+                        label = "Sleep",
+                        value = if (totalSleepMin > 0) Units.fmtDuration(totalSleepMin) else "—"
+                    )
+                    TotalsRow(
+                        icon = Icons.Default.Spa,
+                        label = "Diapers",
+                        value = if (totalDiapers > 0) "$totalDiapers" else "—"
+                    )
+                }
+            }
+        }
+
         // ── Quick action chips ─────────────────────────────
         item {
             Row(
@@ -537,6 +586,37 @@ private fun StatCard(
 
 @Composable
 private fun LastActivityRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun TotalsRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String

@@ -12,7 +12,9 @@
 
 package com.turkbot.babytracker.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.automirrored.outlined.Note
@@ -36,10 +38,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -48,6 +53,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.turkbot.babytracker.BabyTrackerApp
+import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.ui.screens.ChartsScreen
 import com.turkbot.babytracker.ui.screens.DiaperScreen
 import com.turkbot.babytracker.ui.screens.FeedScreen
@@ -114,6 +120,25 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             TopAppBar(
                 title = { Text("Infans") },
                 actions = {
+                    // Sync status indicator — colored dot showing relay sync state
+                    val syncState by app.nostrManager.syncState.collectAsState()
+                    val syncColor = when (syncState) {
+                        NostrManager.SyncState.SYNCED -> Color(0xFF4CAF50)
+                        NostrManager.SyncState.PENDING -> Color(0xFFFFC107)
+                        NostrManager.SyncState.DISCONNECTED -> Color(0xFFEF5350)
+                        NostrManager.SyncState.OFFLINE -> Color(0xFF9E9E9E)
+                    }
+                    val syncDesc = when (syncState) {
+                        NostrManager.SyncState.SYNCED -> "Synced"
+                        NostrManager.SyncState.PENDING -> "Sync pending"
+                        NostrManager.SyncState.DISCONNECTED -> "Relay disconnected"
+                        NostrManager.SyncState.OFFLINE -> "Offline mode"
+                    }
+                    Canvas(modifier = Modifier
+                        .padding(end = 12.dp)
+                        .size(10.dp)) {
+                        drawCircle(color = syncColor)
+                    }
                     IconButton(onClick = {
                         navController.navigate("settings") {
                             popUpTo(navController.graph.findStartDestination().id) {
