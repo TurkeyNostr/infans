@@ -194,7 +194,7 @@ fun OnboardingScreen(
                                 gender = childGender, onGender = { childGender = it },
                                 onBack = { page = OnboardPage.WELCOME },
                                 onNext = { page = OnboardPage.UNITS },
-                                onSkip = { page = OnboardPage.DONE }
+                                onSkip = { page = OnboardPage.UNITS }
                             )
                         }
                         OnboardPage.UNITS -> item {
@@ -203,7 +203,7 @@ fun OnboardingScreen(
                                 onSystem = { unitSystem = it },
                                 onBack = { page = OnboardPage.ADD_CHILD },
                                 onNext = { page = OnboardPage.CHOOSE_MODE },
-                                onSkip = { page = OnboardPage.DONE }
+                                onSkip = { page = OnboardPage.CHOOSE_MODE }
                             )
                         }
                         OnboardPage.CHOOSE_MODE -> item {
@@ -218,7 +218,13 @@ fun OnboardingScreen(
                                         SyncMode.PARTNER -> OnboardPage.SETUP_NOSTR
                                     }
                                 },
-                                onSkip = { page = OnboardPage.DONE }
+                                onSkip = {
+                                    page = when (syncMode) {
+                                        SyncMode.OFFLINE -> OnboardPage.DONE
+                                        SyncMode.RELAY_SOLO,
+                                        SyncMode.PARTNER -> OnboardPage.SETUP_NOSTR
+                                    }
+                                }
                             )
                         }
                         OnboardPage.SETUP_NOSTR -> item {
