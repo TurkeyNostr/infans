@@ -79,8 +79,8 @@ class AppUpdater(
 
     /**
      * Check GitHub releases for a newer version.
-     * Tries /releases/latest first (most recent non-prerelease), then
-     * falls back to listing all releases and picking the first non-draft.
+     * Tries /releases/latest first, then falls back to listing all releases
+     * (including prereleases — this is a beta app) and picks the first non-draft.
      */
     suspend fun checkForUpdate(): CheckResult = withContext(Dispatchers.IO) {
         try {
@@ -128,10 +128,10 @@ class AppUpdater(
                 return@withContext CheckResult.UpToDate
             }
 
-            // Find the latest non-draft, non-prerelease release with an APK
+            // Find the latest non-draft release with an APK
+            // (includes prereleases — this is a beta app)
             for (release in releasesList) {
                 if (release.optBoolean("draft", false)) continue
-                if (release.optBoolean("prerelease", false)) continue
 
                 val tagName = release.optString("tag_name", "")
                 val versionName = tagName.removePrefix("v")
