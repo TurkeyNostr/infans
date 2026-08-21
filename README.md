@@ -81,12 +81,12 @@ For a debug APK:
 This project borrows code, patterns, and ideas from the following open-source Nostr projects:
 
 ### Runstr
-- **Repository**: https://github.com/CodyTseng/runstr
+- **Repository**: https://github.com/TheWildHustle/Runstr
 - **What we borrowed**: The encrypted backup model — collecting all app data into a JSON payload, gzip-compressing it (NIP-44's 64KB limit), NIP-44 self-encrypting, and publishing as a kind 30078 replaceable parameterized event. The overall architecture of `BackupService.kt` follows this pattern.
 - **License**: MIT
 
 ### nospeak
-- **Repository**: https://github.com/uakihir0/nospeak
+- **Repository**: https://github.com/psic4t/nospeak
 - **What we borrowed**: The relay pool pattern (managing multiple WebSocket relay connections in parallel with merged event flow), the foreground service pattern for keeping relay connections alive when the app is backgrounded (`RelaySyncService.kt`), and the general approach to relay subscription management.
 - **License**: MIT
 
