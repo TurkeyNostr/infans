@@ -162,16 +162,29 @@ fun OnboardingScreen(
 
     Scaffold { innerPadding ->
         Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "onboard"
-            ) { current ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 32.dp)
+            Column(modifier = Modifier.fillMaxSize()) {
+                // ── "Skip all" — visible on every page, top-right ──
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
                 ) {
+                    TextButton(onClick = {
+                        setOnboardingComplete(context)
+                        onComplete()
+                    }) {
+                        Text("Skip all", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                AnimatedContent(
+                    targetState = page,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "onboard"
+                ) { current ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp)
+                    ) {
                     when (current) {
                         OnboardPage.WELCOME -> item { WelcomePage { page = OnboardPage.ADD_CHILD } }
                         OnboardPage.ADD_CHILD -> item {
@@ -180,7 +193,8 @@ fun OnboardingScreen(
                                 dob = childDob, onDob = { childDob = it },
                                 gender = childGender, onGender = { childGender = it },
                                 onBack = { page = OnboardPage.WELCOME },
-                                onNext = { page = OnboardPage.UNITS }
+                                onNext = { page = OnboardPage.UNITS },
+                                onSkip = { page = OnboardPage.DONE }
                             )
                         }
                         OnboardPage.UNITS -> item {
@@ -188,7 +202,8 @@ fun OnboardingScreen(
                                 unitSystem = unitSystem,
                                 onSystem = { unitSystem = it },
                                 onBack = { page = OnboardPage.ADD_CHILD },
-                                onNext = { page = OnboardPage.CHOOSE_MODE }
+                                onNext = { page = OnboardPage.CHOOSE_MODE },
+                                onSkip = { page = OnboardPage.DONE }
                             )
                         }
                         OnboardPage.CHOOSE_MODE -> item {
@@ -202,7 +217,8 @@ fun OnboardingScreen(
                                         SyncMode.RELAY_SOLO,
                                         SyncMode.PARTNER -> OnboardPage.SETUP_NOSTR
                                     }
-                                }
+                                },
+                                onSkip = { page = OnboardPage.DONE }
                             )
                         }
                         OnboardPage.SETUP_NOSTR -> item {
@@ -309,6 +325,7 @@ fun OnboardingScreen(
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -406,7 +423,8 @@ private fun AddChildPage(
     dob: String, onDob: (String) -> Unit,
     gender: String, onGender: (String) -> Unit,
     onBack: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageHeader("Add Your Child", "Let's start with who we're tracking.")
@@ -449,7 +467,8 @@ private fun AddChildPage(
             onBack = onBack,
             onNext = onNext,
             nextEnabled = name.isNotBlank(),
-            nextLabel = "Next"
+            nextLabel = "Next",
+            onSkip = onSkip
         )
     }
 }
@@ -463,7 +482,8 @@ private fun UnitsPage(
     unitSystem: UnitPreferences.System,
     onSystem: (UnitPreferences.System) -> Unit,
     onBack: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageHeader("Measurement Units", "Choose how amounts and weights are displayed.")
@@ -493,7 +513,7 @@ private fun UnitsPage(
         )
 
         Spacer(Modifier.height(32.dp))
-        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next")
+        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next", onSkip = onSkip)
     }
 }
 
@@ -506,7 +526,8 @@ private fun ChooseModePage(
     selected: SyncMode,
     onSelect: (SyncMode) -> Unit,
     onBack: () -> Unit,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         PageHeader("How Do You Want To Sync?", "You can change this later in Settings.")
@@ -522,7 +543,7 @@ private fun ChooseModePage(
         }
 
         Spacer(Modifier.height(24.dp))
-        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next")
+        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next", onSkip = onSkip)
     }
 }
 
@@ -949,7 +970,8 @@ private fun NavButtons(
     onBack: () -> Unit,
     onNext: () -> Unit,
     nextEnabled: Boolean,
-    nextLabel: String
+    nextLabel: String,
+    onSkip: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -957,6 +979,9 @@ private fun NavButtons(
     ) {
         OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
             Text("Back")
+        }
+        if (onSkip != null) {
+            TextButton(onClick = onSkip) { Text("Skip") }
         }
         Button(
             onClick = onNext,
