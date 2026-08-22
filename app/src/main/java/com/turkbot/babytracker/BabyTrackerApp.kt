@@ -40,12 +40,14 @@ class BabyTrackerApp : Application() {
         val versionCode = pkgInfo.longVersionCode
         Dbg.info(Cat.GENERAL, "Infans v$versionName ($versionCode) started")
 
-        // Ensure the correct launcher alias is enabled for the stored theme.
-        // No-op if already correct; fixes icon after reinstall/data clear.
-        ThemePack.applyIcon(this, ThemePack.load(this))
-
         nostrManager = NostrManager(this)
         // Load stored identity (local key or Amber npub) and connect to relays
-        appScope.launch { nostrManager.initialize() }
+        appScope.launch {
+            nostrManager.initialize()
+            // Apply the themed launcher icon AFTER initialize() so the
+            // setComponentEnabledSetting call can't race with relay setup.
+            // No-op if the alias is already correct.
+            ThemePack.applyIcon(this@BabyTrackerApp, ThemePack.load(this@BabyTrackerApp))
+        }
     }
 }

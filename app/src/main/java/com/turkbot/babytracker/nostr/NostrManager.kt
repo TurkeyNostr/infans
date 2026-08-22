@@ -77,10 +77,11 @@ class NostrManager(context: Context) {
         "wss://relay.primal.net"
     )
 
-    // Effective relays — start with defaults. After login, NIP-65 relays
-    // (kind 10002) are fetched and applied if the user has any set.
-    // Defaults (damus, nos.lol, primal) are used when no NIP-65 list exists.
-    private val effectiveRelays: List<String> = defaultRelays
+    // Effective relays — start with saved relays if we have them, otherwise
+    // defaults. After login, NIP-65 relays (kind 10002) are fetched and applied
+    // if the user has any set. Defaults (damus, nos.lol, primal) are used when
+    // no NIP-65 list exists and no relays have been saved yet.
+    private val effectiveRelays: List<String> = keyStore.getRelays() ?: defaultRelays
 
     val relayPool = RelayPool(effectiveRelays, httpClient)
     private val backupService = BackupService(appContext, relayPool)
