@@ -2,6 +2,13 @@
 
 A privacy-first baby tracking app with Nostr-based encrypted data storage and parent-to-parent sync.
 
+## Screenshots
+
+<img src="screenshots/1_home.png" width="270">
+<img src="screenshots/2_feed.png" width="270">
+<img src="screenshots/3_sleep.png" width="270">
+<img src="screenshots/4_charts.png" width="270">
+
 ## Features
 
 - **Feeding tracking** — bottle (ml/fl oz), breast (L/R/both + duration), solids
