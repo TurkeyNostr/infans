@@ -851,6 +851,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             var pdfExporting by remember { mutableStateOf(false) }
             var jsonExporting by remember { mutableStateOf(false) }
             var jsonImporting by remember { mutableStateOf(false) }
+            var showJsonExportWarning by remember { mutableStateOf(false) }
             var backupError by remember { mutableStateOf<String?>(null) }
             var backupMessage by remember { mutableStateOf<String?>(null) }
             val jsonFilePicker = rememberLauncherForActivityResult(
@@ -927,30 +928,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     }
                     // JSON backup export
                     OutlinedButton(
-                        onClick = {
-                            jsonExporting = true
-                            backupError = null
-                            backupMessage = null
-                            scope.launch {
-                                try {
-                                    val uri = viewModel.exportToJson(context)
-                                    jsonExporting = false
-                                    if (uri != null) {
-                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "application/json"
-                                            putExtra(Intent.EXTRA_STREAM, uri)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Save JSON Backup"))
-                                    } else {
-                                        backupError = "No data to export"
-                                    }
-                                } catch (e: Exception) {
-                                    jsonExporting = false
-                                    backupError = "JSON export failed: ${e.message}"
-                                }
-                            }
-                        },
+                        onClick = { showJsonExportWarning = true },
                         enabled = !jsonExporting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -981,6 +959,53 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         )
                     }
                 }
+            }
+
+            if (showJsonExportWarning) {
+                AlertDialog(
+                    onDismissRequest = { showJsonExportWarning = false },
+                    title = { Text("JSON Backup Is Not Encrypted") },
+                    text = {
+                        Text(
+                            "The JSON backup file contains all your baby tracking data in plain, readable text. " +
+                            "It does NOT include your Nostr private key, but anyone who opens this file can see " +
+                            "your child's name, feeding times, sleep logs, and notes.\n\n" +
+                            "Store it somewhere safe. Do not share it or upload it to a cloud service you don't control."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showJsonExportWarning = false
+                                jsonExporting = true
+                                backupError = null
+                                backupMessage = null
+                                scope.launch {
+                                    try {
+                                        val uri = viewModel.exportToJson(context)
+                                        jsonExporting = false
+                                        if (uri != null) {
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/json"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(shareIntent, "Save JSON Backup"))
+                                        } else {
+                                            backupError = "No data to export"
+                                        }
+                                    } catch (e: Exception) {
+                                        jsonExporting = false
+                                        backupError = "JSON export failed: ${e.message}"
+                                    }
+                                }
+                            }
+                        ) { Text("Export Anyway") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showJsonExportWarning = false }) { Text("Cancel") }
+                    }
+                )
             }
         }
 
