@@ -54,6 +54,11 @@ import kotlinx.coroutines.delay
  * If [alarmPresets] is non-empty, alarm preset chips are shown. Selecting a
  * preset and starting the timer schedules a background notification via
  * WorkManager — fires even if the app is not on screen.
+ *
+ * The timer survives navigation away and back, configuration changes
+ * (rotation), and process death. The start timestamp is persisted to
+ * SharedPreferences; elapsed time is always derived as now − startTime,
+ * so it stays accurate regardless of how long the app was gone.
  */
 @Composable
 fun LiveTimer(
@@ -62,10 +67,24 @@ fun LiveTimer(
     onStop: (durationMinutes: Int) -> Unit
 ) {
     val context = LocalContext.current
-    var running by remember { mutableStateOf(false) }
-    var startTime by remember { mutableLongStateOf(0L) }
+    val prefs = remember {
+        context.getSharedPreferences("live_timer_prefs", Context.MODE_PRIVATE)
+    }
+
+    // Unique key per timer label so sleep and breast timers don't collide.
+    val keyStart = "start_${label}"
+    val keyAlarm = "alarm_${label}"
+
+    // Restore persisted state on first composition.
+    var startTime by remember {
+        mutableLongStateOf(prefs.getLong(keyStart, 0L))
+    }
+    var alarmMinutes by remember {
+        mutableStateOf(prefs.getInt(keyAlarm, 0))
+    }
+    // Running is derived: if startTime > 0, the timer is active.
+    var running by remember { mutableStateOf(startTime > 0L) }
     var elapsed by remember { mutableLongStateOf(0L) }
-    var alarmMinutes by remember { mutableStateOf(0) }
 
     // Tick every second while running
     LaunchedEffect(running) {
@@ -97,6 +116,11 @@ fun LiveTimer(
                         onStop(minutes)
                         elapsed = 0L
                         startTime = 0L
+                        // Clear persisted state
+                        prefs.edit()
+                            .remove(keyStart)
+                            .remove(keyAlarm)
+                            .apply()
                         // Cancel any pending alarm
                         if (alarmMinutes > 0) {
                             ReminderScheduler.cancelTimerAlarm(context)
@@ -117,6 +141,11 @@ fun LiveTimer(
                         startTime = System.currentTimeMillis()
                         elapsed = 0L
                         running = true
+                        // Persist start time so timer survives process death
+                        prefs.edit()
+                            .putLong(keyStart, startTime)
+                            .putInt(keyAlarm, alarmMinutes)
+                            .apply()
                         // Schedule alarm if a preset is selected
                         if (alarmMinutes > 0) {
                             ReminderScheduler.scheduleTimerAlarm(context, label, alarmMinutes)

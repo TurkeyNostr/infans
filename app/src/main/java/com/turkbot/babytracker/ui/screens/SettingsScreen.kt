@@ -15,6 +15,7 @@ package com.turkbot.babytracker.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.turkbot.babytracker.ui.theme.ThemePack
 import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
 import com.turkbot.babytracker.nostr.NostrManager
@@ -90,6 +92,84 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
+        // ─── Appearance ───────────────────────────────────
+        item {
+            SectionHeader("Appearance")
+        }
+
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var selectedTheme by remember { mutableStateOf(ThemePack.load(context)) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Color Theme",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Pick a color scheme. Material You uses your phone's wallpaper colors (Android 12+).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    ThemePack.entries.forEach { pack ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = selectedTheme == pack,
+                                    onClick = {
+                                        selectedTheme = pack
+                                        ThemePack.save(context, pack)
+                                    }
+                                )
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedTheme == pack,
+                                onClick = {
+                                    selectedTheme = pack
+                                    ThemePack.save(context, pack)
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            // Color preview swatches
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = pack.light.primary,
+                                modifier = Modifier.size(24.dp)
+                            ) {}
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = pack.dark.primary,
+                                modifier = Modifier.size(24.dp)
+                            ) {}
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                pack.displayName,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Restart the app for the new theme to take effect.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         // ─── Measurement Units ───────────────────────────
         item {
             SectionHeader("Measurement Units")
