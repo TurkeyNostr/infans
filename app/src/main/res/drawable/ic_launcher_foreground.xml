@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Infans app icon foreground — crescent moon + star.
-  Moon is a warm cream (#FFF4E0), star is pale gold (#FFE082).
-  Both stay within the 72x72 safe zone (18-90) of the 108x108 viewport.
-  Crescent is created with two overlapping circles using evenOdd fill.
+  Infans app icon foreground — baby bottle silhouette.
+  Nipple dome → collar ring (wider than body) → neck → body.
+  Cream (#FFF4E0) on themed gradient background.
+  All coordinates within the 72x72 safe zone (18-90) of 108x108.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -11,45 +11,27 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Crescent moon: big circle minus offset circle = crescent -->
     <path
         android:fillColor="#FFF4E0"
-        android:fillType="evenOdd"
         android:pathData="
-            M 30,52
-            a 22,22 0 1,0 44,0
-            a 22,22 0 1,0 -44,0
-            M 44,46
-            a 18,18 0 1,0 36,0
-            a 18,18 0 1,0 -36,0
-            Z"/>
-
-    <!-- 4-pointed sparkle star to the left of the crescent opening -->
-    <path
-        android:fillColor="#FFE082"
-        android:pathData="
-            M 36,33
-            L 37.5,36.5
-            L 41,38
-            L 37.5,39.5
-            L 36,43
-            L 34.5,39.5
-            L 31,38
-            L 34.5,36.5
-            Z"/>
-
-    <!-- Tiny secondary sparkle for depth -->
-    <path
-        android:fillColor="#FFE082"
-        android:fillAlpha="0.6"
-        android:pathData="
-            M 28,60
-            L 29,61.5
-            L 30.5,62
-            L 29,62.5
-            L 28,64
-            L 27,62.5
-            L 25.5,62
-            L 27,61.5
-            Z"/>
+            M 42,80
+            Q 42,84 46,84
+            L 62,84
+            Q 66,84 66,80
+            L 66,50
+            L 60,50
+            L 60,46
+            L 68,46
+            L 68,40
+            L 58,40
+            L 58,34
+            Q 58,26 54,26
+            Q 50,26 50,34
+            L 50,40
+            L 40,40
+            L 40,46
+            L 48,46
+            L 48,50
+            L 42,50
+            Z" />
 </vector>
