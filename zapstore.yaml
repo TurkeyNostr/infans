@@ -1,0 +1,58 @@
+# Zapstore publishing config for Infans
+# Docs: https://github.com/zapstore/zsp
+
+# Source code repository (for display + APK fetching from GitHub Releases)
+repository: https://github.com/TurkeyNostr/infans
+
+# App metadata
+name: Infans
+summary: A privacy-first baby tracking app with Nostr-based encrypted storage and parent-to-parent sync.
+description: |
+  Infans is a privacy-first baby tracking app with Nostr-based encrypted data storage and parent-to-parent sync.
+
+  Features:
+  - Feeding tracking — bottle (ml/fl oz), breast (L/R/both + duration), solids
+  - Sleep tracking — start time + duration
+  - Weight & height — kg/lb/oz with optional height (cm/in)
+  - Diaper tracking — wet/dirty/both
+  - Bath tracking
+  - Milestones — first smile, first word, etc.
+  - Growth charts — WHO weight-for-age percentile bands (P3/P50/P97) for boys/girls
+  - Activity trend charts — daily/weekly/monthly/yearly for all metrics
+  - 7-day trend bar charts — feeding and sleep trends on the Summary tab
+  - Encrypted backup — all data encrypted with NIP-44 and stored on Nostr relays as kind 30078 events
+  - Parent sync — share data with co-parent via NIP-44 encrypted kind 30078 partner-sync events
+  - Notes — leave async notes for the other parent (synced inside the same encrypted payload)
+  - Offline-first — Room database is the local source of truth; Nostr syncs in the background
+
+  No telemetry, no analytics, no tracking. Your data stays yours — encrypted on Nostr relays you choose.
+
+# Category tags
+tags:
+  - baby
+  - tracker
+  - parenting
+  - nostr
+  - privacy
+
+# SPDX license identifier
+license: MIT
+
+# Nostr NIPs supported by this app
+supported_nips:
+  - "01"
+  - "05"
+  - "19"
+  - "44"
+  - "55"
+  - "65"
+
+# App icon (512x512 PNG) — TODO: export from adaptive XML icon
+# icon: ./assets/zapstore-icon.png
+
+# Screenshots
+images:
+  - ./screenshots/1_home.png
+  - ./screenshots/2_feed.png
+  - ./screenshots/3_sleep.png
+  - ./screenshots/4_charts.png
