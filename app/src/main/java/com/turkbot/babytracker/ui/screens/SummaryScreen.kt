@@ -13,6 +13,7 @@
 package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,9 +40,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -147,26 +150,34 @@ fun SummaryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        // ── Hero child info card ──────────────────────────
+        // ── Hero child info card — gradient fill ──────────────
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    )
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         child?.name ?: "No child selected",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold
                     )
                     if (child?.dob != null) {
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "Age: ${Units.ageFromDOB(child!!.dob)}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                         )
                     }
                     // Multi-child selector — show dropdown if more than 1 child
@@ -210,7 +221,8 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -221,17 +233,20 @@ fun SummaryScreen(
                     LastActivityRow(
                         icon = Icons.Default.Restaurant,
                         label = "Last Feeding",
-                        value = lastFeeding?.let { "${Units.feedTypeLabel(it.type)} · ${timeAgo(it.time)}" } ?: "—"
+                        value = lastFeeding?.let { "${Units.feedTypeLabel(it.type)} · ${timeAgo(it.time)}" } ?: "—",
+                        iconTint = MaterialTheme.colorScheme.primary
                     )
                     LastActivityRow(
                         icon = Icons.Default.Bedtime,
                         label = "Last Sleep",
-                        value = lastSleep?.let { "${Units.fmtDuration(it.duration)} · ${timeAgo(it.start)}" } ?: "—"
+                        value = lastSleep?.let { "${Units.fmtDuration(it.duration)} · ${timeAgo(it.start)}" } ?: "—",
+                        iconTint = MaterialTheme.colorScheme.tertiary
                     )
                     LastActivityRow(
                         icon = Icons.Default.Spa,
                         label = "Last Diaper",
-                        value = lastDiaper?.let { "${it.contents.replaceFirstChar { c -> c.uppercase() }} · ${timeAgo(it.time)}" } ?: "—"
+                        value = lastDiaper?.let { "${it.contents.replaceFirstChar { c -> c.uppercase() }} · ${timeAgo(it.time)}" } ?: "—",
+                        iconTint = MaterialTheme.colorScheme.secondary
                     )
                 }
             }
@@ -243,7 +258,8 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -270,17 +286,20 @@ fun SummaryScreen(
                             if (totalBreastMin > 0) parts.add("${totalBreastMin} min breast")
                             if (parts.isEmpty()) "${todayFeedings.size} session${if (todayFeedings.size > 1) "s" else ""}"
                             else parts.joinToString(" · ")
-                        }
+                        },
+                        iconTint = MaterialTheme.colorScheme.primary
                     )
                     TotalsRow(
                         icon = Icons.Default.Bedtime,
                         label = "Sleep",
-                        value = if (totalSleepMin > 0) Units.fmtDuration(totalSleepMin) else "—"
+                        value = if (totalSleepMin > 0) Units.fmtDuration(totalSleepMin) else "—",
+                        iconTint = MaterialTheme.colorScheme.tertiary
                     )
                     TotalsRow(
                         icon = Icons.Default.Spa,
                         label = "Diapers",
-                        value = if (totalDiapers > 0) "$totalDiapers" else "—"
+                        value = if (totalDiapers > 0) "$totalDiapers" else "—",
+                        iconTint = MaterialTheme.colorScheme.secondary
                     )
                 }
             }
@@ -348,13 +367,15 @@ fun SummaryScreen(
                     icon = Icons.Default.Restaurant,
                     label = "Feedings Today",
                     value = todayFeedings.size.toString(),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.primary
                 )
                 StatCard(
                     icon = Icons.Default.Bedtime,
                     label = "Sleep Today",
                     value = Units.fmtDuration(todaySleeps.sumOf { it.duration }),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.tertiary
                 )
             }
         }
@@ -367,7 +388,8 @@ fun SummaryScreen(
                     icon = Icons.Default.Spa,
                     label = "Diapers Today",
                     value = todayDiapers.size.toString(),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.secondary
                 )
                 StatCard(
                     icon = Icons.Default.WaterDrop,
@@ -375,7 +397,8 @@ fun SummaryScreen(
                     value = pumpings.count { p ->
                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(p.time)) == today
                     }.toString(),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.tertiary
                 )
             }
         }
@@ -386,7 +409,8 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -415,7 +439,8 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -473,7 +498,8 @@ fun SummaryScreen(
                     subtitle = "${timeFmt.format(Date(f.time))}" +
                         (if (f.amount != null && f.unit != null) " · ${Units.fmtAmount(f.amount, f.unit)}" else ""),
                     onDelete = { viewModel.deleteFeeding(f.id) },
-                    onEditTime = { editingFeeding = f }
+                    onEditTime = { editingFeeding = f },
+                    iconTint = MaterialTheme.colorScheme.primary
                 )
             }
             items(todaySleeps) { s ->
@@ -482,7 +508,8 @@ fun SummaryScreen(
                     title = "Sleep · ${Units.fmtDuration(s.duration)}",
                     subtitle = timeFmt.format(Date(s.start)),
                     onDelete = { viewModel.deleteSleep(s.id) },
-                    onEditTime = { editingSleep = s }
+                    onEditTime = { editingSleep = s },
+                    iconTint = MaterialTheme.colorScheme.tertiary
                 )
             }
         }
@@ -523,6 +550,10 @@ private fun QuickActionCard(
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp
         )
     ) {
         Column(
@@ -550,24 +581,36 @@ private fun StatCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 1.dp
         )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(iconTint.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 value,
@@ -588,7 +631,8 @@ private fun StatCard(
 private fun LastActivityRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    value: String
+    value: String,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -597,7 +641,7 @@ private fun LastActivityRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = iconTint,
             modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(8.dp))
@@ -619,7 +663,8 @@ private fun LastActivityRow(
 private fun TotalsRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    value: String
+    value: String,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -628,7 +673,7 @@ private fun TotalsRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = iconTint,
             modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(8.dp))
@@ -652,24 +697,34 @@ private fun ActivityRow(
     title: String,
     subtitle: String,
     onDelete: () -> Unit,
-    onEditTime: (() -> Unit)? = null
+    onEditTime: (() -> Unit)? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(iconTint.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -692,6 +747,12 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
     val maxVal = (values.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
     val todayIdx = values.lastIndex
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val barGradient = Brush.verticalGradient(
+        listOf(barColor, barColor.copy(alpha = 0.5f))
+    )
+    val todayGradient = Brush.verticalGradient(
+        listOf(barColor, barColor.copy(alpha = 0.7f))
+    )
 
     Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
         val w = size.width
@@ -724,11 +785,13 @@ private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color
                 v == 0.0 -> 0.15f
                 else -> 0.7f
             }
+            val gradient = if (i == todayIdx) todayGradient else barGradient
             drawRoundRect(
-                color = barColor.copy(alpha = alpha),
+                brush = gradient,
                 topLeft = Offset(x, y),
                 size = Size(barW, barH),
-                cornerRadius = CornerRadius(6f, 6f)
+                cornerRadius = CornerRadius(6f, 6f),
+                alpha = alpha
             )
 
             // Value label above bar
