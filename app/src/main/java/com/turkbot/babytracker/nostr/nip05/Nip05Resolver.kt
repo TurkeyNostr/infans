@@ -77,14 +77,14 @@ class Nip05Resolver(
     suspend fun resolve(identifier: String): String? = withContext(Dispatchers.IO) {
         val parts = identifier.trim().split("@", limit = 2)
         if (parts.size != 2) {
-            Log.w(TAG, "Invalid NIP-05 format: $identifier")
+            Log.w(TAG, "Invalid NIP-05 format")
             return@withContext null
         }
         val name = parts[0]
         val domain = parts[1]
 
         val url = "https://$domain/.well-known/nostr.json?name=$name"
-        Log.d(TAG, "Resolving NIP-05: $identifier")
+        Log.d(TAG, "Resolving NIP-05: ${identifier.take(20)}...")
 
         try {
             val request = Request.Builder().url(url).get().build()
@@ -109,10 +109,10 @@ class Nip05Resolver(
             // Convert hex pubkey to npub
             val pubBytes = NostrKeys.fromHex(hexPubkey!!)
             val npub = NostrKeys.encodeNpub(pubBytes)
-            Log.d(TAG, "NIP-05 resolved: $identifier → ${npub.take(20)}...")
+            Log.d(TAG, "NIP-05 resolved: ${identifier.take(20)}... → ${npub.take(20)}...")
             npub
         } catch (e: Exception) {
-            Log.e(TAG, "NIP-05 resolution error for $identifier", e)
+            Log.e(TAG, "NIP-05 resolution error for ${identifier.take(20)}...", e)
             null
         }
     }

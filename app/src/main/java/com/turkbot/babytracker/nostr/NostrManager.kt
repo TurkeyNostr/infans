@@ -448,7 +448,7 @@ class NostrManager(context: Context) {
         if (nip05 != null) {
             keyStore.savePartnerNip05(nip05)
             _partnerNip05.value = nip05
-            Log.d(TAG, "Partner NIP-05: $nip05")
+            Log.d(TAG, "Partner NIP-05: ${nip05.take(20)}...")
         }
     }
 
@@ -458,7 +458,7 @@ class NostrManager(context: Context) {
         val nip05 = nip05Resolver.fetchNip05(signerVal.pubkeyHex)
         if (nip05 != null) {
             _myNip05.value = nip05
-            Log.d(TAG, "My NIP-05: $nip05")
+            Log.d(TAG, "My NIP-05: ${nip05.take(20)}...")
         }
     }
 
