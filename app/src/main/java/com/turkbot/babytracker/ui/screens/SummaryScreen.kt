@@ -54,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.*
+import com.turkbot.babytracker.ui.components.BarChart
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
@@ -744,89 +745,5 @@ private fun ActivityRow(
     }
 }
 
-@Composable
-private fun BarChart(values: List<Double>, labels: List<String>, barColor: Color) {
-    val maxVal = (values.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
-    val todayIdx = values.lastIndex
-    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val barGradient = Brush.verticalGradient(
-        listOf(barColor, barColor.copy(alpha = 0.5f))
-    )
-    val todayGradient = Brush.verticalGradient(
-        listOf(barColor, barColor.copy(alpha = 0.7f))
-    )
 
-    Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
-        val w = size.width
-        val h = size.height
-        val baseline = h - 32f
-        val maxBarH = baseline - 20f
-        val leftPad = 15f
-        val rightPad = 15f
-        val areaW = w - leftPad - rightPad
-        val n = values.size
-        val slotW = areaW / n
-        val gap = slotW * 0.25f
-        val barW = slotW - gap
-
-        // Axis line
-        drawLine(
-            color = onSurfaceVariant.copy(alpha = 0.2f),
-            start = Offset(leftPad, baseline),
-            end = Offset(w - rightPad, baseline),
-            strokeWidth = 1f
-        )
-
-        values.forEachIndexed { i, v ->
-            val barH = (v / maxVal * maxBarH).toFloat().coerceAtLeast(2f)
-            val x = leftPad + i * slotW + gap / 2
-            val y = baseline - barH
-
-            val alpha = when {
-                i == todayIdx -> 1f
-                v == 0.0 -> 0.15f
-                else -> 0.7f
-            }
-            val gradient = if (i == todayIdx) todayGradient else barGradient
-            drawRoundRect(
-                brush = gradient,
-                topLeft = Offset(x, y),
-                size = Size(barW, barH),
-                cornerRadius = CornerRadius(6f, 6f),
-                alpha = alpha
-            )
-
-            // Value label above bar
-            if (v > 0) {
-                drawIntoCanvas {
-                    it.nativeCanvas.drawText(
-                        if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(v),
-                        x + barW / 2,
-                        y - 4f,
-                        android.graphics.Paint().apply {
-                            color = barColor.toArgb()
-                            textSize = 28f
-                            isFakeBoldText = true
-                            textAlign = android.graphics.Paint.Align.CENTER
-                        }
-                    )
-                }
-            }
-
-            // Day label below bar
-            drawIntoCanvas {
-                it.nativeCanvas.drawText(
-                    labels[i],
-                    x + barW / 2,
-                    baseline + 24f,
-                    android.graphics.Paint().apply {
-                        color = if (i == todayIdx) barColor.toArgb() else onSurfaceVariant.copy(alpha = 0.6f).toArgb()
-                        textSize = 26f
-                        isFakeBoldText = i == todayIdx
-                        textAlign = android.graphics.Paint.Align.CENTER
-                    }
-                )
-            }
-        }
-    }
-}
+// ── BarChart moved to ui/components/BarChart.kt ──

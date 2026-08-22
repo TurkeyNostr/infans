@@ -14,6 +14,7 @@ package com.turkbot.babytracker.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,13 +28,19 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.turkbot.babytracker.data.entities.Weight
+import com.turkbot.babytracker.data.entities.*
+import com.turkbot.babytracker.ui.components.BarChart
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.WhoPercentiles
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.Date
 
 private const val MIN_AGE = 0.0
 private const val MAX_AGE = 24.0
@@ -49,14 +56,82 @@ private data class ChartColors(
     val labelBg: Color
 )
 
+// ── Period + metric enums for activity trends ──────────
+
+private enum class Period(val label: String, val buckets: Int) {
+    DAILY("Daily", 7),       // last 7 days
+    WEEKLY("Weekly", 8),     // last 8 weeks
+    MONTHLY("Monthly", 6),   // last 6 months
+    YEARLY("Yearly", 5)      // last 5 years
+}
+
+private enum class Metric(val label: String, val unit: String) {
+    FEEDINGS("Feedings", "count"),
+    SLEEP("Sleep", "hours"),
+    DIAPERS("Diapers", "count"),
+    BATHS("Baths", "count"),
+    PUMPING("Pumping", "ml"),
+    WEIGHT("Weight", "kg"),
+    MILESTONES("Milestones", "count"),
+    HEALTH("Health Records", "count")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChartsScreen(viewModel: BabyViewModel) {
     val weights by viewModel.weights.collectAsState()
+    val feedings by viewModel.feedings.collectAsState()
+    val sleeps by viewModel.sleeps.collectAsState()
+    val diapers by viewModel.diapers.collectAsState()
+    val baths by viewModel.baths.collectAsState()
+    val pumpings by viewModel.pumpings.collectAsState()
+    val milestones by viewModel.milestones.collectAsState()
+    val healthRecords by viewModel.healthRecords.collectAsState()
     val activeChild by viewModel.activeChild.collectAsState()
+
+    var selectedTab by remember { mutableStateOf(0) }  // 0 = growth, 1 = activity
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // ── Tab row ──────────────────────────────────────
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Growth") }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Activity") }
+            )
+        }
+
+        if (selectedTab == 0) {
+            GrowthTab(weights, activeChild)
+        } else {
+            ActivityTab(
+                feedings = feedings,
+                sleeps = sleeps,
+                diapers = diapers,
+                baths = baths,
+                pumpings = pumpings,
+                weights = weights,
+                milestones = milestones,
+                healthRecords = healthRecords
+            )
+        }
+    }
+}
+
+// ── Growth tab (original chart) ────────────────────────
+
+@Composable
+private fun GrowthTab(weights: List<Weight>, activeChild: Child?) {
     var unit by remember { mutableStateOf("kg") }
 
-    // Theme-aware colors for the chart
     val colorScheme = MaterialTheme.colorScheme
     val chartColors = remember(colorScheme) {
         ChartColors(
@@ -82,7 +157,7 @@ fun ChartsScreen(viewModel: BabyViewModel) {
         )
         if (activeChild != null) {
             Text(
-                text = activeChild!!.name,
+                text = activeChild.name,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -163,6 +238,257 @@ fun ChartsScreen(viewModel: BabyViewModel) {
     }
 }
 
+// ── Activity tab ───────────────────────────────────────
+
+@Composable
+private fun ActivityTab(
+    feedings: List<Feeding>,
+    sleeps: List<Sleep>,
+    diapers: List<Diaper>,
+    baths: List<Bath>,
+    pumpings: List<Pumping>,
+    weights: List<Weight>,
+    milestones: List<Milestone>,
+    healthRecords: List<HealthRecord>
+) {
+    var selectedPeriod by remember { mutableStateOf(Period.DAILY) }
+    var selectedMetric by remember { mutableStateOf(Metric.FEEDINGS) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // ── Period selector ─────────────────────────────
+        item {
+            Text(
+                "Activity Trends",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Period.entries.forEach { period ->
+                    FilterChip(
+                        selected = selectedPeriod == period,
+                        onClick = { selectedPeriod = period },
+                        label = { Text(period.label) }
+                    )
+                }
+            }
+        }
+
+        // ── Metric selector ─────────────────────────────
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Metric.entries.forEach { metric ->
+                    FilterChip(
+                        selected = selectedMetric == metric,
+                        onClick = { selectedMetric = metric },
+                        label = { Text(metric.label) }
+                    )
+                }
+            }
+        }
+
+        // ── Chart card ──────────────────────────────────
+        item {
+            val (values, labels) = remember(
+                selectedPeriod, selectedMetric,
+                feedings, sleeps, diapers, baths, pumpings, weights, milestones, healthRecords
+            ) {
+                aggregateActivity(
+                    period = selectedPeriod,
+                    metric = selectedMetric,
+                    feedings = feedings,
+                    sleeps = sleeps,
+                    diapers = diapers,
+                    baths = baths,
+                    pumpings = pumpings,
+                    weights = weights,
+                    milestones = milestones,
+                    healthRecords = healthRecords
+                )
+            }
+
+            val barColor = when (selectedMetric) {
+                Metric.FEEDINGS -> MaterialTheme.colorScheme.primary
+                Metric.SLEEP -> MaterialTheme.colorScheme.tertiary
+                Metric.DIAPERS -> MaterialTheme.colorScheme.secondary
+                Metric.BATHS -> MaterialTheme.colorScheme.primary
+                Metric.PUMPING -> MaterialTheme.colorScheme.tertiary
+                Metric.WEIGHT -> MaterialTheme.colorScheme.secondary
+                Metric.MILESTONES -> MaterialTheme.colorScheme.primary
+                Metric.HEALTH -> MaterialTheme.colorScheme.tertiary
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "${selectedMetric.label} — ${selectedPeriod.label}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        selectedMetric.unit,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (values.all { it == 0.0 }) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(160.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No ${selectedMetric.label.lowercase()} recorded in this period",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        BarChart(
+                            values = values,
+                            labels = labels,
+                            barColor = barColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Aggregation logic ──────────────────────────────────
+
+/**
+ * Aggregate activity data into buckets for the given period + metric.
+ * Returns (values, labels) for the BarChart.
+ */
+private fun aggregateActivity(
+    period: Period,
+    metric: Metric,
+    feedings: List<Feeding>,
+    sleeps: List<Sleep>,
+    diapers: List<Diaper>,
+    baths: List<Bath>,
+    pumpings: List<Pumping>,
+    weights: List<Weight>,
+    milestones: List<Milestone>,
+    healthRecords: List<HealthRecord>
+): Pair<List<Double>, List<String>> {
+    val now = Calendar.getInstance()
+    val n = period.buckets
+    val values = DoubleArray(n)
+    val labels = ArrayList<String>(n)
+
+    // Build bucket boundaries (oldest → newest)
+    val buckets = ArrayList<Pair<Calendar, Calendar>>(n) // [start, end)
+    val fmt = when (period) {
+        Period.DAILY -> SimpleDateFormat("EEE", Locale.getDefault())
+        Period.WEEKLY -> SimpleDateFormat("M/d", Locale.getDefault())
+        Period.MONTHLY -> SimpleDateFormat("MMM", Locale.getDefault())
+        Period.YEARLY -> SimpleDateFormat("yyyy", Locale.getDefault())
+    }
+
+    for (i in 0 until n) {
+        val idx = n - 1 - i  // i=0 → newest bucket, i=n-1 → oldest
+        val (start, end) = bucketRange(period, now, idx)
+        buckets.add(start to end)
+    }
+    // buckets is now oldest → newest
+
+    for (i in 0 until n) {
+        val (start, end) = buckets[i]
+        val count: Double = when (metric) {
+            Metric.FEEDINGS -> feedings.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.SLEEP -> {
+                sleeps.filter { it.start in start.timeInMillis until end.timeInMillis }
+                    .sumOf { it.duration / 60.0 }  // minutes → hours
+            }
+            Metric.DIAPERS -> diapers.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.BATHS -> baths.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.PUMPING -> {
+                pumpings.filter { it.time in start.timeInMillis until end.timeInMillis }
+                    .sumOf { it.amount }
+            }
+            Metric.WEIGHT -> weights.count { it.date in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.MILESTONES -> milestones.count { it.date in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.HEALTH -> healthRecords.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
+        }
+        values[i] = count
+
+        // Label: use the start of the bucket
+        labels.add(fmt.format(Date(start.timeInMillis)))
+    }
+
+    return values.toList() to labels
+}
+
+/**
+ * Get the [start, end) calendar range for a bucket that is `idx` periods
+ * before the current period. idx=0 = current period, idx=1 = previous, etc.
+ */
+private fun bucketRange(period: Period, now: Calendar, idx: Int): Pair<Calendar, Calendar> {
+    var start = now.clone() as Calendar
+    var end = now.clone() as Calendar
+
+    when (period) {
+        Period.DAILY -> {
+            start.add(Calendar.DAY_OF_YEAR, -idx)
+            start.set(Calendar.HOUR_OF_DAY, 0)
+            start.set(Calendar.MINUTE, 0)
+            start.set(Calendar.SECOND, 0)
+            start.set(Calendar.MILLISECOND, 0)
+            end = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
+        }
+        Period.WEEKLY -> {
+            // Align to Monday
+            start.add(Calendar.WEEK_OF_YEAR, -idx)
+            start.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            start.set(Calendar.HOUR_OF_DAY, 0)
+            start.set(Calendar.MINUTE, 0)
+            start.set(Calendar.SECOND, 0)
+            start.set(Calendar.MILLISECOND, 0)
+            end = (start.clone() as Calendar).apply { add(Calendar.WEEK_OF_YEAR, 1) }
+        }
+        Period.MONTHLY -> {
+            start.add(Calendar.MONTH, -idx)
+            start.set(Calendar.DAY_OF_MONTH, 1)
+            start.set(Calendar.HOUR_OF_DAY, 0)
+            start.set(Calendar.MINUTE, 0)
+            start.set(Calendar.SECOND, 0)
+            start.set(Calendar.MILLISECOND, 0)
+            end = (start.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+        }
+        Period.YEARLY -> {
+            start.add(Calendar.YEAR, -idx)
+            start.set(Calendar.MONTH, Calendar.JANUARY)
+            start.set(Calendar.DAY_OF_MONTH, 1)
+            start.set(Calendar.HOUR_OF_DAY, 0)
+            start.set(Calendar.MINUTE, 0)
+            start.set(Calendar.SECOND, 0)
+            start.set(Calendar.MILLISECOND, 0)
+            end = (start.clone() as Calendar).apply { add(Calendar.YEAR, 1) }
+        }
+    }
+
+    return start to end
+}
+
+// ── Legend composables ─────────────────────────────────
+
 @Composable
 private fun LegendRow(colors: ChartColors) {
     Row(
@@ -236,10 +562,8 @@ private fun GrowthChart(
 ) {
     val textMeasurer = rememberTextMeasurer()
 
-    // Precompute WHO band path data for ages 0..24
     val bandData = remember(gender) { buildWhoBandData(gender) }
 
-    // Convert baby weights to (ageMonths, displayValue) in selected unit
     val points = remember(weights, dob, unit) {
         weights
             .map { w -> Units.ageInMonths(dob, w.date) to kgToUnit(w.value, unit) }
@@ -247,7 +571,6 @@ private fun GrowthChart(
             .sortedBy { it.first }
     }
 
-    // Y range: combine WHO band max and baby point max, round up nicely
     val yMax = remember(bandData, points, unit) {
         val whoMax = bandData.maxOf { it.p97 }
         val babyMax = points.maxByOrNull { it.second }?.second ?: 0.0
@@ -275,7 +598,6 @@ private data class BandPoint(
     val p97: Double
 )
 
-/** Build WHO band data for integer ages 0..24 (converted to display unit done at draw time). */
 private fun buildWhoBandData(gender: String): List<BandPoint> {
     return (0..24).mapNotNull { age ->
         val bands = WhoPercentiles.getBands(gender, age.toDouble())
@@ -284,7 +606,6 @@ private fun buildWhoBandData(gender: String): List<BandPoint> {
     }
 }
 
-/** Convert kg to the display unit numeric value. */
 private fun kgToUnit(kg: Double, unit: String): Double = when (unit) {
     "kg" -> kg
     "lb" -> Units.kgToLb(kg)
@@ -292,7 +613,6 @@ private fun kgToUnit(kg: Double, unit: String): Double = when (unit) {
     else -> kg
 }
 
-/** Round up to a nice axis maximum. */
 private fun niceCeil(value: Double): Double {
     if (value <= 0) return 1.0
     val magnitude = Math.pow(10.0, Math.floor(Math.log10(value)))
@@ -342,7 +662,6 @@ private fun DrawScope.drawGrowthChart(
     fun yForValue(v: Double): Float =
         chartBottom - ((v - yMin) / yRange * chartHeight).toFloat()
 
-    // ── Grid lines + Y axis labels ──────────────────
     val ySteps = 5
     for (i in 0..ySteps) {
         val v = yMin + (yMax - yMin) * i / ySteps
@@ -367,7 +686,6 @@ private fun DrawScope.drawGrowthChart(
         )
     }
 
-    // ── X axis labels (0, 6, 12, 18, 24) ───────────
     listOf(0, 6, 12, 18, 24).forEach { age ->
         val x = xForAge(age.toDouble())
         drawLine(
@@ -389,7 +707,6 @@ private fun DrawScope.drawGrowthChart(
         )
     }
 
-    // X axis title
     val xTitle = textMeasurer.measure(
         buildAnnotatedString { append("Age (months)") },
         style = TextStyle(fontSize = 9.sp, color = colors.axis)
@@ -402,7 +719,6 @@ private fun DrawScope.drawGrowthChart(
         )
     )
 
-    // ── Axis frame ─────────────────────────────────
     drawLine(
         color = colors.axis,
         start = Offset(chartLeft, chartTop),
@@ -418,15 +734,12 @@ private fun DrawScope.drawGrowthChart(
 
     if (bandData.isEmpty()) return
 
-    // ── WHO P3-P97 filled band ─────────────────────
     val bandPath = Path().apply {
-        // Top edge: P97 left→right
         bandData.forEachIndexed { i, bp ->
             val x = xForAge(bp.age)
             val y = yForValue(kgToUnit(bp.p97, unit))
             if (i == 0) moveTo(x, y) else lineTo(x, y)
         }
-        // Bottom edge: P3 right→left
         bandData.asReversed().forEach { bp ->
             val x = xForAge(bp.age)
             val y = yForValue(kgToUnit(bp.p3, unit))
@@ -436,7 +749,6 @@ private fun DrawScope.drawGrowthChart(
     }
     drawPath(bandPath, color = colors.band)
 
-    // ── P50 dashed line ────────────────────────────
     val p50Path = Path().apply {
         bandData.forEachIndexed { i, bp ->
             val x = xForAge(bp.age)
@@ -453,7 +765,6 @@ private fun DrawScope.drawGrowthChart(
         )
     )
 
-    // ── P3 / P97 dotted lines ──────────────────────
     val dottedEffect = PathEffect.dashPathEffect(floatArrayOf(2f, 5f))
     listOf({ bp: BandPoint -> bp.p3 }, { bp: BandPoint -> bp.p97 }).forEach { sel ->
         val path = Path().apply {
@@ -468,7 +779,6 @@ private fun DrawScope.drawGrowthChart(
 
     if (points.isEmpty()) return
 
-    // ── Baby weight line ───────────────────────────
     val babyPath = Path().apply {
         points.forEachIndexed { i, (age, v) ->
             val x = xForAge(age)
@@ -478,7 +788,6 @@ private fun DrawScope.drawGrowthChart(
     }
     drawPath(babyPath, color = colors.babyLine, style = Stroke(width = 2.5f))
 
-    // ── Baby weight dots ───────────────────────────
     points.forEach { (age, v) ->
         val x = xForAge(age)
         val y = yForValue(v)
@@ -486,7 +795,6 @@ private fun DrawScope.drawGrowthChart(
         drawCircle(color = Color.White, radius = 2f, center = Offset(x, y))
     }
 
-    // ── Latest value label ─────────────────────────
     val latest = points.last()
     val lx = xForAge(latest.first)
     val ly = yForValue(latest.second)
@@ -506,7 +814,6 @@ private fun DrawScope.drawGrowthChart(
             background = colors.labelBg
         )
     )
-    // Place label above-right of the dot, clamp to chart bounds
     var labelX = lx + 8f
     var labelY = ly - labelLayout.size.height - 6f
     if (labelX + labelLayout.size.width > chartRight) {
@@ -518,7 +825,6 @@ private fun DrawScope.drawGrowthChart(
     drawText(labelLayout, topLeft = Offset(labelX, labelY))
 }
 
-/** Format an axis tick value for the current unit. */
 private fun formatAxisValue(v: Double, unit: String): String = when (unit) {
     "oz" -> "${v.toInt()}"
     else -> "${"%.1f".format(v)}"
