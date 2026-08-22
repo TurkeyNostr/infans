@@ -47,8 +47,8 @@ supported_nips:
   - "55"
   - "65"
 
-# App icon (512x512 PNG) — TODO: export from adaptive XML icon
-# icon: ./assets/zapstore-icon.png
+# App icon (512x512 PNG)
+icon: ./assets/zapstore-icon.png
 
 # Screenshots
 images:
