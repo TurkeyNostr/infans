@@ -101,6 +101,16 @@ class NostrManager(context: Context) {
     fun relayStates(): List<Pair<String, RelayState>> = relayPool.relayStates()
 
     /**
+     * Apply a user-specified relay list. Saves to SecureKeyStore and
+     * reconfigures the relay pool immediately. Subscriptions are preserved
+     * across the reconfigure (RelayPool captures and re-applies them).
+     * The user's NIP-65 list is NOT re-fetched — this is a manual override.
+     */
+    fun applyCustomRelays(urls: List<String>) {
+        applyRelays(urls)
+    }
+
+    /**
      * Check whether the partner has published any kind 30078 events to our
      * shared relays. Returns a map of relay URL → Boolean (true if the relay
      * returned at least one event from the partner).

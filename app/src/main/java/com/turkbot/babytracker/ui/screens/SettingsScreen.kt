@@ -561,6 +561,121 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             }
         }
 
+        // ─── Custom Relays ──────────────────────────────
+        item {
+            var showRelayEditor by remember { mutableStateOf(false) }
+            var relayInput by rememberSaveable { mutableStateOf("") }
+            var relayError by remember { mutableStateOf<String?>(null) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Relays",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "These relays receive your encrypted backups and partner-sync events. " +
+                        "By default, relays come from your Nostr NIP-65 list (kind 10002). " +
+                        "You can override them here if needed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Current relay list
+                    currentRelays.forEach { url ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                url.removePrefix("wss://").removePrefix("ws://"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "(${url.substringBefore("://")})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+
+                    if (showRelayEditor) {
+                        OutlinedTextField(
+                            value = relayInput,
+                            onValueChange = {
+                                relayInput = it
+                                relayError = null
+                            },
+                            label = { Text("Relay URLs (one per line)") },
+                            placeholder = { Text("wss://relay.example.com\nwss://another.relay.com") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 100.dp),
+                            isError = relayError != null,
+                            supportingText = relayError?.let { { Text(it) } }
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    val urls = relayInput
+                                        .lines()
+                                        .map { it.trim() }
+                                        .filter { it.isNotEmpty() }
+                                        .map { url ->
+                                            when {
+                                                url.startsWith("wss://") || url.startsWith("ws://") -> url
+                                                url.startsWith("https://") -> url.replace("https://", "wss://")
+                                                url.startsWith("http://") -> url.replace("http://", "ws://")
+                                                else -> "wss://$url"
+                                            }
+                                        }
+                                        .distinct()
+                                    if (urls.isEmpty()) {
+                                        relayError = "Enter at least one relay URL"
+                                        return@TextButton
+                                    }
+                                    if (urls.any { !it.startsWith("wss://") && !it.startsWith("ws://") }) {
+                                        relayError = "Invalid URL format"
+                                        return@TextButton
+                                    }
+                                    nostrManager.applyCustomRelays(urls)
+                                    showRelayEditor = false
+                                    relayInput = ""
+                                }
+                            ) { Text("Apply") }
+                            TextButton(
+                                onClick = {
+                                    showRelayEditor = false
+                                    relayInput = ""
+                                    relayError = null
+                                }
+                            ) { Text("Cancel") }
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                relayInput = currentRelays.joinToString("\n")
+                                showRelayEditor = true
+                            }
+                        ) { Text("Edit Relays") }
+                    }
+                }
+            }
+        }
+
         // ─── Sync Diagnostic ─────────────────────────────
         item {
             var diagRunning by remember { mutableStateOf(false) }
