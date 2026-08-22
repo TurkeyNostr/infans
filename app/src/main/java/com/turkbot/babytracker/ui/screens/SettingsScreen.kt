@@ -120,25 +120,24 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     )
                     Spacer(Modifier.height(4.dp))
                     ThemePack.entries.forEach { pack ->
+                        val onSelect = {
+                            selectedTheme = pack
+                            ThemePack.save(context, pack)
+                            ThemePack.applyIcon(context, pack)
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .selectable(
                                     selected = selectedTheme == pack,
-                                    onClick = {
-                                        selectedTheme = pack
-                                        ThemePack.save(context, pack)
-                                    }
+                                    onClick = onSelect
                                 )
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
                                 selected = selectedTheme == pack,
-                                onClick = {
-                                    selectedTheme = pack
-                                    ThemePack.save(context, pack)
-                                }
+                                onClick = onSelect
                             )
                             Spacer(Modifier.width(8.dp))
                             // Color preview swatches
@@ -162,7 +161,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Restart the app for the new theme to take effect.",
+                        "The app will restart to apply the new theme and icon.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

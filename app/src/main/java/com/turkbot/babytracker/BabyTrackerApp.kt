@@ -16,6 +16,7 @@ import android.app.Application
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
 import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
 import com.turkbot.babytracker.nostr.NostrManager
+import com.turkbot.babytracker.ui.theme.ThemePack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,10 @@ class BabyTrackerApp : Application() {
         val versionName = pkgInfo.versionName ?: "?"
         val versionCode = pkgInfo.longVersionCode
         Dbg.info(Cat.GENERAL, "Infans v$versionName ($versionCode) started")
+
+        // Ensure the correct launcher alias is enabled for the stored theme.
+        // No-op if already correct; fixes icon after reinstall/data clear.
+        ThemePack.applyIcon(this, ThemePack.load(this))
 
         nostrManager = NostrManager(this)
         // Load stored identity (local key or Amber npub) and connect to relays

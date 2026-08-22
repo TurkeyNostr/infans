@@ -11,7 +11,9 @@
  */
 package com.turkbot.babytracker.ui.theme
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -242,20 +244,26 @@ private val TealDark = darkColorScheme(
 enum class ThemePack(
     val displayName: String,
     val light: ColorScheme,
-    val dark: ColorScheme
+    val dark: ColorScheme,
+    /** Manifest activity-alias suffix for the themed launcher icon. */
+    private val iconAlias: String
 ) {
-    DYNAMIC("Material You (system)", PurpleLight, PurpleDark),
-    PURPLE("Purple (default)", PurpleLight, PurpleDark),
-    BLUE("Ocean Blue", BlueLight, BlueDark),
-    GREEN("Forest Green", GreenLight, GreenDark),
-    PINK("Rose Pink", PinkLight, PinkDark),
-    ORANGE("Sunset Orange", OrangeLight, OrangeDark),
-    TEAL("Teal Mist", TealLight, TealDark);
+    DYNAMIC("Material You (system)", PurpleLight, PurpleDark, "LauncherPurple"),
+    PURPLE("Purple (default)", PurpleLight, PurpleDark, "LauncherPurple"),
+    BLUE("Ocean Blue", BlueLight, BlueDark, "LauncherBlue"),
+    GREEN("Forest Green", GreenLight, GreenDark, "LauncherGreen"),
+    PINK("Rose Pink", PinkLight, PinkDark, "LauncherPink"),
+    ORANGE("Sunset Orange", OrangeLight, OrangeDark, "LauncherOrange"),
+    TEAL("Teal Mist", TealLight, TealDark, "LauncherTeal");
 
     companion object {
         private const val PREFS_NAME = "baby_tracker_prefs"
         private const val KEY_THEME = "theme_pack"
         private const val DEFAULT_THEME = "DYNAMIC"
+        private val ALL_ALIASES = listOf(
+            "LauncherPurple", "LauncherBlue", "LauncherGreen",
+            "LauncherPink", "LauncherOrange", "LauncherTeal"
+        )
 
         fun load(context: Context): ThemePack {
             val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -266,6 +274,33 @@ enum class ThemePack(
         fun save(context: Context, pack: ThemePack) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(KEY_THEME, pack.name).apply()
+        }
+
+        /**
+         * Enable the activity-alias for [pack]'s icon and disable all others.
+         * The home-screen icon updates within a few seconds, but the OS kills
+         * the app process during the component switch — call this right before
+         * asking the user to restart.
+         *
+         * Safe to call on every launch: if the alias is already correct, the
+         * PackageManager calls are no-ops (same enabled state).
+         */
+        fun applyIcon(context: Context, pack: ThemePack) {
+            val pm = context.packageManager
+            val pkg = context.packageName
+            val targetAlias = pack.iconAlias
+
+            for (alias in ALL_ALIASES) {
+                val enabled = if (alias == targetAlias)
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                pm.setComponentEnabledSetting(
+                    ComponentName(pkg, "$pkg.$alias"),
+                    enabled,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
         }
     }
 }
