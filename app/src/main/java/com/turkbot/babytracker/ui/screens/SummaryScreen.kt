@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.Bathtub
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Spa
@@ -67,7 +68,8 @@ fun SummaryScreen(
     onNavigateToMilestones: () -> Unit = {},
     onNavigateToDiaper: () -> Unit = {},
     onNavigateToPumping: () -> Unit = {},
-    onNavigateToHealth: () -> Unit = {}
+    onNavigateToHealth: () -> Unit = {},
+    onNavigateToBath: () -> Unit = {}
 ) {
     val feedings by viewModel.feedings.collectAsState()
     val sleeps by viewModel.sleeps.collectAsState()
@@ -312,10 +314,10 @@ fun SummaryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 QuickActionCard(
-                    icon = Icons.Default.MonitorWeight,
-                    label = "Weight",
+                    icon = Icons.Default.Bathtub,
+                    label = "Bath",
                     modifier = Modifier.weight(1f),
-                    onClick = onNavigateToWeight
+                    onClick = onNavigateToBath
                 )
                 QuickActionCard(
                     icon = Icons.Default.ShowChart,

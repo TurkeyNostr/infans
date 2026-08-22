@@ -77,6 +77,10 @@ class BabyViewModel(
         .filterNotNull().flatMapLatest { repo.healthRecords(it.id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val baths: StateFlow<List<Bath>> = activeChild
+        .filterNotNull().flatMapLatest { repo.baths(it.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val notes: StateFlow<List<Note>> = repo.notes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -335,6 +339,35 @@ class BabyViewModel(
     fun updateHealthRecordTime(id: String, time: Long) {
         viewModelScope.launch {
             repo.updateHealthRecordTime(id, time)
+            nostr.exportBackup()
+        }
+    }
+
+    // ── Baths ─────────────────────────────────────────
+    fun addBath(type: String, note: String?) {
+        val child = activeChild.value ?: return
+        viewModelScope.launch {
+            repo.saveBath(Bath(
+                id = UUID.randomUUID().toString(),
+                childId = child.id,
+                time = System.currentTimeMillis(),
+                type = type,
+                note = note
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deleteBath(id: String) {
+        viewModelScope.launch {
+            repo.deleteBath(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateBathTime(id: String, time: Long) {
+        viewModelScope.launch {
+            repo.updateBathTime(id, time)
             nostr.exportBackup()
         }
     }

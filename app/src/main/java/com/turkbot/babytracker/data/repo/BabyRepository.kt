@@ -34,6 +34,7 @@ class BabyRepository(context: Context) {
     private val diaperDao = db.diaperDao()
     private val pumpingDao = db.pumpingDao()
     private val healthRecordDao = db.healthRecordDao()
+    private val bathDao = db.bathDao()
 
     // ── Children ──────────────────────────────────────
     fun children(): Flow<List<Child>> = childDao.getAll()
@@ -101,6 +102,13 @@ class BabyRepository(context: Context) {
     suspend fun deleteHealthRecord(id: String) = healthRecordDao.delete(id)
     suspend fun allHealthRecords(): List<HealthRecord> = healthRecordDao.getAll()
 
+    // ── Baths ─────────────────────────────────────────
+    fun baths(childId: String): Flow<List<Bath>> = bathDao.getByChild(childId)
+    suspend fun saveBath(b: Bath) = bathDao.insert(b)
+    suspend fun updateBathTime(id: String, time: Long) = bathDao.updateTime(id, time)
+    suspend fun deleteBath(id: String) = bathDao.delete(id)
+    suspend fun allBaths(): List<Bath> = bathDao.getAll()
+
     // ── Backup / restore helpers ──────────────────────
     suspend fun collectAllData(): BackupPayload {
         return BackupPayload(
@@ -114,7 +122,8 @@ class BabyRepository(context: Context) {
             diapers = diaperDao.getAll(),
             pumpings = pumpingDao.getAll(),
             healthRecords = healthRecordDao.getAll(),
-            notes = noteDao.getAllList()
+            notes = noteDao.getAllList(),
+            baths = bathDao.getAll()
         )
     }
 }
@@ -134,5 +143,6 @@ data class BackupPayload(
     val diapers: List<Diaper> = emptyList(),
     val pumpings: List<Pumping> = emptyList(),
     val healthRecords: List<HealthRecord> = emptyList(),
-    val notes: List<Note> = emptyList()
+    val notes: List<Note> = emptyList(),
+    val baths: List<Bath> = emptyList()
 )

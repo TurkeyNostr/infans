@@ -32,8 +32,9 @@ import com.turkbot.babytracker.data.entities.*
         Diaper::class,
         Pumping::class,
         HealthRecord::class,
+        Bath::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,6 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun diaperDao(): DiaperDao
     abstract fun pumpingDao(): PumpingDao
     abstract fun healthRecordDao(): HealthRecordDao
+    abstract fun bathDao(): BathDao
 
     companion object {
         @Volatile
@@ -71,6 +73,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 3→4: add the baths table for tracking baby baths.
+         * All existing data is preserved.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS baths (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        childId TEXT NOT NULL,
+                        time INTEGER NOT NULL,
+                        type TEXT NOT NULL,
+                        note TEXT
+                    )"""
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -78,7 +98,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "baby-tracker"
                 )
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build().also {
                     INSTANCE = it

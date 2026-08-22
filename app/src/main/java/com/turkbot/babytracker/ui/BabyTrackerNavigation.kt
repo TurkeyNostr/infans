@@ -56,6 +56,7 @@ import com.turkbot.babytracker.BabyTrackerApp
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.ui.screens.ChartsScreen
 import com.turkbot.babytracker.ui.screens.DiaperScreen
+import com.turkbot.babytracker.ui.screens.BathScreen
 import com.turkbot.babytracker.ui.screens.FeedScreen
 import com.turkbot.babytracker.ui.screens.HealthScreen
 import com.turkbot.babytracker.ui.screens.MilestonesScreen
@@ -206,7 +207,8 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                     onNavigateToMilestones = { navController.navigate("milestones") },
                     onNavigateToDiaper = { navController.navigate("diaper") },
                     onNavigateToPumping = { navController.navigate("pumping") },
-                    onNavigateToHealth = { navController.navigate("health") }
+                    onNavigateToHealth = { navController.navigate("health") },
+                    onNavigateToBath = { navController.navigate("bath") }
                 )
             }
             composable(Screen.Feed.route) { FeedScreen(viewModel) }
@@ -217,6 +219,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
             composable("diaper") { DiaperScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable("pumping") { PumpingScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable("health") { HealthScreen(viewModel, onSaved = { navController.popBackStack() }) }
+            composable("bath") { BathScreen(viewModel, onSaved = { navController.popBackStack() }) }
             composable(Screen.Notes.route) { NotesScreen(viewModel, app.nostrManager) }
             composable("settings") { SettingsScreen(viewModel, app.nostrManager, onReplayOnboarding = {
                 context.getSharedPreferences("baby_tracker_prefs", Context.MODE_PRIVATE)
