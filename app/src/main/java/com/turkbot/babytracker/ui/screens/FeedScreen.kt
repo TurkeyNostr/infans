@@ -50,6 +50,7 @@ private val BREAST_SIDES = listOf("left", "right", "both")
 @Composable
 fun FeedScreen(viewModel: BabyViewModel) {
     val feedings by viewModel.feedings.collectAsState()
+    val remoteBreastSession by viewModel.remoteBreastSession.collectAsState()
 
     var selectedType by remember { mutableStateOf("bottle") }
     var amountText by remember { mutableStateOf("") }
@@ -166,20 +167,29 @@ fun FeedScreen(viewModel: BabyViewModel) {
                             // ── Live timer for breastfeeding ──
                             LiveTimer(
                                 label = "Breast",
-                                alarmPresets = listOf(5, 10, 15, 20)
-                            ) { minutes ->
-                                val saved = viewModel.addFeeding(
-                                    type = "breast",
-                                    amount = null,
-                                    unit = "min",
-                                    breastSide = selectedSide,
-                                    duration = minutes,
-                                    note = null
-                                )
-                                if (!saved) {
-                                    saveError = "No child selected — add a baby first"
+                                alarmPresets = listOf(5, 10, 15, 20),
+                                remoteSession = remoteBreastSession,
+                                onStop = { minutes ->
+                                    val saved = viewModel.addFeeding(
+                                        type = "breast",
+                                        amount = null,
+                                        unit = "min",
+                                        breastSide = selectedSide,
+                                        duration = minutes,
+                                        note = null
+                                    )
+                                    if (!saved) {
+                                        saveError = "No child selected — add a baby first"
+                                    }
+                                    viewModel.onLocalTimerStopped("Breast")
+                                },
+                                onStart = { startTime, alarmMins ->
+                                    viewModel.onTimerStarted("Breast", startTime, alarmMins)
+                                },
+                                onRemoteStop = { minutes ->
+                                    viewModel.onRemoteTimerStopped("Breast", minutes)
                                 }
-                            }
+                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 "Or enter duration manually:",

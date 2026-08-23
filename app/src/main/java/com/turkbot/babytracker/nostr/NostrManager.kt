@@ -16,6 +16,7 @@ import android.content.Context
 import android.util.Log
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
 import com.turkbot.babytracker.debug.DebugLogger.Category as Cat
+import com.turkbot.babytracker.data.entities.ActiveSession
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.data.repo.BackupPayload
 import com.turkbot.babytracker.nostr.amber.AmberSigner
@@ -152,6 +153,27 @@ class NostrManager(context: Context) {
     private val _partnerNip05 = MutableStateFlow<String?>(keyStore.getPartnerNip05())
     val partnerNip05: StateFlow<String?> = _partnerNip05
 
+    // ── Active session sync ───────────────────────────────
+    //
+    // Two flows: one per timer label. When the partner starts a timer, we
+    // decrypt the session and emit it here. When they stop (or we stop it),
+    // we emit null. The UI observes these to show/hide the remote timer.
+    //
+    // Keyed by label so "Sleep" and "Breast" sessions don't collide — same
+    // as the local SharedPreferences keys in LiveTimer.
+
+    private val _remoteSleepSession = MutableStateFlow<ActiveSession?>(null)
+    val remoteSleepSession: StateFlow<ActiveSession?> = _remoteSleepSession
+
+    private val _remoteBreastSession = MutableStateFlow<ActiveSession?>(null)
+    val remoteBreastSession: StateFlow<ActiveSession?> = _remoteBreastSession
+
+    /** Tracks the session ID we started locally, so we can dedupe our own echo. */
+    @Volatile
+    private var localSleepSessionId: String? = null
+    @Volatile
+    private var localBreastSessionId: String? = null
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /** Event IDs currently being decrypted — prevents the same event from
@@ -241,6 +263,8 @@ class NostrManager(context: Context) {
         const val SUB_BACKUP = "baby_backup_sub"
         const val SUB_NIP65 = "nip65_relay_sub"
         const val SUB_PARTNER_SYNC = "partner_sync_sub"
+        const val SUB_SESSION_SLEEP = "session_sleep_sub"
+        const val SUB_SESSION_BREAST = "session_breast_sub"
     }
     /**
      * Initialize: load stored signer (local or amber), connect to relays, subscribe.
@@ -415,6 +439,17 @@ class NostrManager(context: Context) {
                             """{"kinds":[30078],"#p":["$myPubkeyHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                         )
                     }
+                    // Subscribe to active session events from this partner
+                    val sleepDTag = BackupService.sessionDTag("Sleep")
+                    val breastDTag = BackupService.sessionDTag("Breast")
+                    relayPool.subscribe(
+                        SUB_SESSION_SLEEP,
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$sleepDTag"],"limit":1}"""
+                    )
+                    relayPool.subscribe(
+                        SUB_SESSION_BREAST,
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$breastDTag"],"limit":1}"""
+                    )
                 }
             }
         }
@@ -521,6 +556,10 @@ class NostrManager(context: Context) {
                                 SUB_PARTNER_SYNC + "_author" -> {
                                     scope.launch { handlePartnerSyncEvent(wrapper.event, signer) }
                                 }
+                                SUB_SESSION_SLEEP,
+                                SUB_SESSION_BREAST -> {
+                                    scope.launch { handleSessionEvent(wrapper.event, signer) }
+                                }
                             }
                         }
                     }
@@ -598,6 +637,28 @@ class NostrManager(context: Context) {
             }
         }
 
+        // Subscribe to active session events from our partner.
+        // Two separate subscriptions (one per timer label) so we can route
+        // events to the correct StateFlow without parsing the d-tag first.
+        // We subscribe by #p (our pubkey) AND #d (session d-tag) to avoid
+        // pulling down unrelated 30078 events. No 'since' filter — we always
+        // want the latest session state (it's replaceable, so only one exists).
+        if (partnerNpubVal != null) {
+            val partnerHex = npubToHex(partnerNpubVal)
+            if (partnerHex != null) {
+                val sleepDTag = BackupService.sessionDTag("Sleep")
+                val breastDTag = BackupService.sessionDTag("Breast")
+                relayPool.subscribe(
+                    SUB_SESSION_SLEEP,
+                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$sleepDTag"],"limit":1}"""
+                )
+                relayPool.subscribe(
+                    SUB_SESSION_BREAST,
+                    """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$breastDTag"],"limit":1}"""
+                )
+            }
+        }
+
         // If partner is set but we don't have their NIP-05 yet, fetch it
         if (_partnerNpub.value != null && _partnerNip05.value == null) {
             scope.launch { refreshPartnerNip05() }
@@ -648,6 +709,18 @@ class NostrManager(context: Context) {
                         """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$partnerSyncDTag"],"limit":10}"""
                     }
                     relayPool.subscribe(SUB_PARTNER_SYNC + "_author", partnerAuthorFilter)
+
+                    // Re-subscribe active session events on new relays
+                    val sleepDTag = BackupService.sessionDTag("Sleep")
+                    val breastDTag = BackupService.sessionDTag("Breast")
+                    relayPool.subscribe(
+                        SUB_SESSION_SLEEP,
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$sleepDTag"],"limit":1}"""
+                    )
+                    relayPool.subscribe(
+                        SUB_SESSION_BREAST,
+                        """{"kinds":[30078],"authors":["$partnerHex"],"#d":["$breastDTag"],"limit":1}"""
+                    )
                 }
             }
         } else {
@@ -912,6 +985,124 @@ class NostrManager(context: Context) {
             keyStore.markEventProcessed(event.id)
             inflightEvents.remove(event.id)
         }
+    }
+
+    // ── Active session handling ───────────────────────────
+
+    /**
+     * Handle an incoming session event from the partner.
+     *
+     * If the content is empty (session_ended tag), clear the remote session.
+     * Otherwise, decrypt and emit the [ActiveSession] so the UI shows the
+     * timer as running.
+     *
+     * Skips events we authored ourselves (the relay echoes our own publish
+     * back to us) — checked via localSleepSessionId/localBreastSessionId.
+     */
+    private suspend fun handleSessionEvent(event: RelayEvent, signer: NostrSigner) {
+        // Verify sender is our partner
+        val expectedPartnerHex = _partnerNpub.value?.let { npubToHex(it) }
+        if (expectedPartnerHex == null || event.pubkey != expectedPartnerHex) {
+            return
+        }
+
+        // Route to the correct flow based on the d-tag
+        val dTag = event.tags.firstOrNull { it.isNotEmpty() && it[0] == "d" }?.getOrNull(1) ?: return
+        val isSleep = dTag == BackupService.sessionDTag("Sleep")
+        val isBreast = dTag == BackupService.sessionDTag("Breast")
+        if (!isSleep && !isBreast) return
+
+        // Check if this is a session_ended event (empty content)
+        val isEnded = event.tags.any { it.isNotEmpty() && it[0] == "session_ended" && it.getOrNull(1) == "true" }
+        if (isEnded || event.content.isBlank()) {
+            if (isSleep) _remoteSleepSession.value = null
+            else _remoteBreastSession.value = null
+            Dbg.info(Cat.SYNC, "Remote session ended: ${if (isSleep) "Sleep" else "Breast"}")
+            return
+        }
+
+        // Decrypt the session
+        val session = backupService.decryptSession(event.content, signer, expectedPartnerHex) ?: return
+
+        // Skip if this is our own session echoed back
+        if (isSleep && session.sessionId == localSleepSessionId) return
+        if (isBreast && session.sessionId == localBreastSessionId) return
+
+        // Emit to the correct flow
+        if (isSleep) _remoteSleepSession.value = session
+        else _remoteBreastSession.value = session
+        Dbg.info(Cat.SYNC, "Remote session received: ${session.label}, started by ${session.startedBy.take(12)}")
+    }
+
+    /**
+     * Start a timer session and notify the partner.
+     *
+     * Called by the ViewModel when the user hits "Start Timer". Publishes an
+     * [ActiveSession] encrypted to the partner so their phone shows the timer
+     * as running. Also tracks the session ID locally so we can ignore the
+     * relay echo of our own event.
+     *
+     * Returns the session ID on success, null if no partner or publish failed.
+     */
+    suspend fun startSession(
+        label: String,
+        childId: String,
+        startTime: Long,
+        alarmMinutes: Int
+    ): String? {
+        val signer = _signer.value ?: return null
+        val partnerNpubVal = _partnerNpub.value ?: return null
+        val partnerHex = npubToHex(partnerNpubVal) ?: return null
+
+        val sessionId = java.util.UUID.randomUUID().toString()
+        val session = ActiveSession(
+            sessionId = sessionId,
+            label = label,
+            childId = childId,
+            startTime = startTime,
+            startedBy = signer.pubkeyHex,
+            alarmMinutes = alarmMinutes
+        )
+
+        // Track locally so we can dedupe the relay echo
+        if (label.equals("Sleep", ignoreCase = true)) localSleepSessionId = sessionId
+        else localBreastSessionId = sessionId
+
+        // Publish to partner. Use amberMutex to serialize Amber prompts.
+        val ok = amberMutex.withLock {
+            backupService.publishSession(session, signer, partnerHex)
+        }
+        return if (ok) sessionId else null
+    }
+
+    /**
+     * Stop a timer session and notify the partner.
+     *
+     * Called by the ViewModel when the user hits "Stop & Log". Publishes an
+     * empty-content event with the same d-tag to signal "session ended".
+     * Also clears the local session ID tracker.
+     */
+    suspend fun stopSession(label: String) {
+        val signer = _signer.value ?: return
+        val partnerNpubVal = _partnerNpub.value ?: return
+        val partnerHex = npubToHex(partnerNpubVal) ?: return
+
+        if (label.equals("Sleep", ignoreCase = true)) localSleepSessionId = null
+        else localBreastSessionId = null
+
+        amberMutex.withLock {
+            backupService.endSession(label, signer, partnerHex)
+        }
+    }
+
+    /**
+     * Clear the remote session state (e.g. when the local user stops a
+     * remote-started timer). Does NOT publish anything — the stopper
+     * is responsible for calling [stopSession] to notify the other parent.
+     */
+    fun clearRemoteSession(label: String) {
+        if (label.equals("Sleep", ignoreCase = true)) _remoteSleepSession.value = null
+        else _remoteBreastSession.value = null
     }
 
     /**

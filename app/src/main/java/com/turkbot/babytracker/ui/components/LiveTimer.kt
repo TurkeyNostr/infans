@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.data.entities.ActiveSession
 import com.turkbot.babytracker.reminder.ReminderScheduler
 import kotlinx.coroutines.delay
 
@@ -59,12 +60,33 @@ import kotlinx.coroutines.delay
  * (rotation), and process death. The start timestamp is persisted to
  * SharedPreferences; elapsed time is always derived as now − startTime,
  * so it stays accurate regardless of how long the app was gone.
+ *
+ * ── Remote session sync ──
+ *
+ * If [remoteSession] is non-null, the timer shows as running with a
+ * "Started by partner" badge. The local user can stop it — this calls
+ * [onRemoteStop] instead of [onStop], so the ViewModel can notify the
+ * partner via Nostr. When the partner stops the timer on their end, the
+ * remoteSession becomes null and the timer clears automatically.
+ *
+ * A remote session takes priority over a local session — if both exist
+ * (shouldn't happen in practice), the remote one is shown.
+ *
+ * @param remoteSession  session started by the partner, or null if none active
+ * @param onStart        called when the user starts a local timer; receives the
+ *                       start timestamp and selected alarm minutes so the
+ *                       ViewModel can notify the partner via Nostr
+ * @param onRemoteStop   called when the local user stops a partner-started timer;
+ *                       receives the elapsed duration in minutes
  */
 @Composable
 fun LiveTimer(
     label: String,
     alarmPresets: List<Int> = emptyList(),
-    onStop: (durationMinutes: Int) -> Unit
+    remoteSession: ActiveSession? = null,
+    onStop: (durationMinutes: Int) -> Unit,
+    onStart: (startTime: Long, alarmMinutes: Int) -> Unit = { _, _ -> },
+    onRemoteStop: (durationMinutes: Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = remember {
@@ -83,14 +105,28 @@ fun LiveTimer(
         mutableStateOf(prefs.getInt(keyAlarm, 0))
     }
     // Running is derived: if startTime > 0, the timer is active.
-    var running by remember { mutableStateOf(startTime > 0L) }
+    var localRunning by remember { mutableStateOf(startTime > 0L) }
     var elapsed by remember { mutableLongStateOf(0L) }
 
-    // Tick every second while running
-    LaunchedEffect(running) {
-        while (running) {
-            elapsed = System.currentTimeMillis() - startTime
-            delay(1000)
+    // ── Remote session overrides local ──
+    val isRemote = remoteSession != null
+    val effectiveStartTime = remoteSession?.startTime ?: startTime
+    val running = isRemote || localRunning
+
+    // Tick every second while running (local or remote)
+    LaunchedEffect(running, effectiveStartTime) {
+        if (running) {
+            while (true) {
+                elapsed = System.currentTimeMillis() - effectiveStartTime
+                delay(1000)
+            }
+        }
+    }
+
+    // When a remote session ends (partner stopped), clear local elapsed
+    LaunchedEffect(remoteSession) {
+        if (remoteSession == null && !localRunning) {
+            elapsed = 0L
         }
     }
 
@@ -100,31 +136,47 @@ fun LiveTimer(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "$label: ${formatElapsed(elapsed)}",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (running) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column {
+                Text(
+                    text = "$label: ${formatElapsed(elapsed)}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (running) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (isRemote) {
+                    Text(
+                        text = "Started by partner",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
             Spacer(Modifier.width(8.dp))
             if (running) {
                 Button(
                     onClick = {
-                        running = false
                         val minutes = ((elapsed / 60000L).toInt()).coerceAtLeast(1)
-                        onStop(minutes)
-                        elapsed = 0L
-                        startTime = 0L
-                        // Clear persisted state
-                        prefs.edit()
-                            .remove(keyStart)
-                            .remove(keyAlarm)
-                            .apply()
-                        // Cancel any pending alarm
-                        if (alarmMinutes > 0) {
-                            ReminderScheduler.cancelTimerAlarm(context)
-                            alarmMinutes = 0
+                        if (isRemote) {
+                            // Stopping a partner-started timer — notify partner
+                            onRemoteStop(minutes)
+                        } else {
+                            // Stopping our own local timer
+                            localRunning = false
+                            onStop(minutes)
+                            elapsed = 0L
+                            startTime = 0L
+                            // Clear persisted state
+                            prefs.edit()
+                                .remove(keyStart)
+                                .remove(keyAlarm)
+                                .apply()
+                            // Cancel any pending alarm
+                            if (alarmMinutes > 0) {
+                                ReminderScheduler.cancelTimerAlarm(context)
+                                alarmMinutes = 0
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -140,7 +192,7 @@ fun LiveTimer(
                     onClick = {
                         startTime = System.currentTimeMillis()
                         elapsed = 0L
-                        running = true
+                        localRunning = true
                         // Persist start time so timer survives process death
                         prefs.edit()
                             .putLong(keyStart, startTime)
@@ -150,6 +202,8 @@ fun LiveTimer(
                         if (alarmMinutes > 0) {
                             ReminderScheduler.scheduleTimerAlarm(context, label, alarmMinutes)
                         }
+                        // Notify partner that a timer started
+                        onStart(startTime, alarmMinutes)
                     }
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -159,8 +213,8 @@ fun LiveTimer(
             }
         }
 
-        // ── Alarm presets ──
-        if (alarmPresets.isNotEmpty()) {
+        // ── Alarm presets (only shown for local timer, not remote) ──
+        if (alarmPresets.isNotEmpty() && !isRemote) {
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -184,11 +238,11 @@ fun LiveTimer(
                         onClick = {
                             alarmMinutes = if (alarmMinutes == mins) 0 else mins
                         },
-                        enabled = !running,
+                        enabled = !localRunning,
                         label = { Text("${mins}m") }
                     )
                 }
-                if (alarmMinutes > 0 && running) {
+                if (alarmMinutes > 0 && localRunning) {
                     Spacer(Modifier.width(4.dp))
                     Text(
                         "alarm at ${alarmMinutes}m",

@@ -14,6 +14,7 @@ package com.turkbot.babytracker.nostr.events
 
 import android.content.Context
 import android.util.Log
+import com.turkbot.babytracker.data.entities.ActiveSession
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.data.repo.BackupPayload
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
@@ -53,7 +54,11 @@ class BackupService(
         const val BACKUP_KIND = 30078
         const val BACKUP_D_TAG = "baby-tracker-backup"
         const val PARTNER_SYNC_D_TAG = "baby-tracker-sync"
+        const val SESSION_D_TAG_PREFIX = "baby-tracker-session-"
         private const val TAG = "BackupService"
+
+        /** Build the d-tag for a session event. Label determines which timer screen it belongs to. */
+        fun sessionDTag(label: String): String = SESSION_D_TAG_PREFIX + label.lowercase()
     }
 
     /**
@@ -234,6 +239,100 @@ class BackupService(
         } catch (e: Exception) {
             Log.e(TAG, "Partner backup decrypt failed", e)
             return null
+        }
+    }
+
+    // ── Active session sync ───────────────────────────
+
+    /**
+     * Publish a live timer session to the partner via Nostr.
+     *
+     * The [ActiveSession] is JSON-serialized, NIP-44 encrypted to the partner's
+     * pubkey, and published as kind 30078 with:
+     *   - d-tag "baby-tracker-session-{label}" (replaceable — partner always sees latest)
+     *   - p-tag = partner's pubkey (for relay indexing)
+     *
+     * This is lightweight — no gzip, no full data payload. Just the session metadata.
+     */
+    suspend fun publishSession(
+        session: ActiveSession,
+        signer: NostrSigner,
+        partnerPubkeyHex: String
+    ): Boolean {
+        try {
+            val jsonStr = json.encodeToString(ActiveSession.serializer(), session)
+            val encrypted = signer.nip44Encrypt(jsonStr, partnerPubkeyHex)
+
+            val event = NostrEvent.createSigned(
+                kind = BACKUP_KIND,
+                content = encrypted,
+                signer = signer,
+                tags = listOf(
+                    listOf("d", sessionDTag(session.label)),
+                    listOf("p", partnerPubkeyHex),
+                    listOf("client", "Infans", "1.0.0"),
+                    listOf("encrypted", "nip44")
+                )
+            )
+
+            relayPool.publish(event.toJsonObject())
+            Log.d(TAG, "Session published: ${session.label} started at ${session.startTime}")
+            Dbg.info(Cat.SYNC, "Active session published: ${session.label}, session ${session.sessionId.take(8)}")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Session publish failed", e)
+            Dbg.error(Cat.SYNC, "Active session publish failed — ${e.javaClass.simpleName}")
+            return false
+        }
+    }
+
+    /**
+     * Decrypt a session event from the partner.
+     * Returns the [ActiveSession], or null if decryption/parsing fails.
+     */
+    suspend fun decryptSession(
+        content: String,
+        signer: NostrSigner,
+        partnerPubkeyHex: String
+    ): ActiveSession? {
+        return try {
+            val plaintext = signer.nip44Decrypt(content, partnerPubkeyHex)
+            json.decodeFromString(ActiveSession.serializer(), plaintext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Session decrypt failed", e)
+            null
+        }
+    }
+
+    /**
+     * Publish a "session ended" event — empty content with the same d-tag.
+     * This overwrites the session event on relays (kind 30078 is replaceable),
+     * signaling the partner to clear their live timer.
+     */
+    suspend fun endSession(
+        label: String,
+        signer: NostrSigner,
+        partnerPubkeyHex: String
+    ): Boolean {
+        return try {
+            val event = NostrEvent.createSigned(
+                kind = BACKUP_KIND,
+                content = "",
+                signer = signer,
+                tags = listOf(
+                    listOf("d", sessionDTag(label)),
+                    listOf("p", partnerPubkeyHex),
+                    listOf("client", "Infans", "1.0.0"),
+                    listOf("session_ended", "true")
+                )
+            )
+            relayPool.publish(event.toJsonObject())
+            Log.d(TAG, "Session ended: $label")
+            Dbg.info(Cat.SYNC, "Active session ended: $label")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Session end failed", e)
+            false
         }
     }
 

@@ -90,6 +90,10 @@ class BabyViewModel(
     val partnerNpub = nostr.partnerNpub
     val partnerNip05 = nostr.partnerNip05
 
+    // Remote active sessions (from partner)
+    val remoteSleepSession = nostr.remoteSleepSession
+    val remoteBreastSession = nostr.remoteBreastSession
+
     // ── Child management ──────────────────────────────
     fun selectChild(id: String) { _activeChildId.value = id }
 
@@ -170,6 +174,69 @@ class BabyViewModel(
                 duration = duration,
                 note = note
             ))
+            nostr.exportBackup()
+        }
+    }
+
+    // ── Active session sync ───────────────────────────
+    // Called by LiveTimer when the user starts or stops a timer.
+    // Publishes the session state to the partner via Nostr so both phones
+    // see the same running timer.
+
+    /** Called when the user starts a local timer. Notifies the partner. */
+    fun onTimerStarted(label: String, startTime: Long, alarmMinutes: Int) {
+        val child = activeChild.value ?: return
+        viewModelScope.launch {
+            nostr.startSession(label, child.id, startTime, alarmMinutes)
+        }
+    }
+
+    /** Called when the user stops a locally-started timer. Notifies the partner. */
+    fun onLocalTimerStopped(label: String) {
+        viewModelScope.launch {
+            nostr.stopSession(label)
+        }
+    }
+
+    /**
+     * Called when the user stops a partner-started timer.
+     * Logs the sleep/feeding record, notifies the partner that the session
+     * ended, and clears the remote session state.
+     */
+    fun onRemoteTimerStopped(label: String, durationMinutes: Int) {
+        viewModelScope.launch {
+            // Log the record (same as local stop)
+            when (label.lowercase()) {
+                "sleep" -> {
+                    val child = activeChild.value ?: return@launch
+                    repo.saveSleep(Sleep(
+                        id = UUID.randomUUID().toString(),
+                        childId = child.id,
+                        start = System.currentTimeMillis() - durationMinutes * 60_000L,
+                        duration = durationMinutes,
+                        note = null
+                    ))
+                }
+                "breast" -> {
+                    val child = activeChild.value ?: return@launch
+                    repo.saveFeeding(Feeding(
+                        id = UUID.randomUUID().toString(),
+                        childId = child.id,
+                        time = System.currentTimeMillis(),
+                        type = "breast",
+                        amount = null,
+                        unit = "min",
+                        breastSide = null,
+                        duration = durationMinutes,
+                        note = null
+                    ))
+                }
+            }
+            // Notify partner the session ended
+            nostr.stopSession(label)
+            // Clear remote session locally
+            nostr.clearRemoteSession(label)
+            // Backup the new record
             nostr.exportBackup()
         }
     }

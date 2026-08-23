@@ -22,6 +22,7 @@ description: |
   - 7-day trend bar charts — feeding and sleep trends on the Summary tab
   - Encrypted backup — all data encrypted with NIP-44 and stored on Nostr relays as kind 30078 events
   - Parent sync — share data with co-parent via NIP-44 encrypted kind 30078 partner-sync events
+  - Live timer sync — start a nap timer on one phone, stop it on the other; both parents see the running timer in real time
   - Notes — leave async notes for the other parent (synced inside the same encrypted payload)
   - Offline-first — Room database is the local source of truth; Nostr syncs in the background
 

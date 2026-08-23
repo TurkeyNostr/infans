@@ -41,6 +41,7 @@ import java.util.Locale
 @Composable
 fun SleepScreen(viewModel: BabyViewModel) {
     val sleeps by viewModel.sleeps.collectAsState()
+    val remoteSleepSession by viewModel.remoteSleepSession.collectAsState()
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     var startText by remember {
@@ -93,14 +94,23 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     // ── Live timer ──
                     LiveTimer(
                         label = "Sleep",
-                        alarmPresets = listOf(30, 45, 60, 90)
-                    ) { minutes ->
-                        viewModel.addSleep(
-                            start = System.currentTimeMillis() - minutes * 60_000L,
-                            duration = minutes,
-                            note = null
-                        )
-                    }
+                        alarmPresets = listOf(30, 45, 60, 90),
+                        remoteSession = remoteSleepSession,
+                        onStop = { minutes ->
+                            viewModel.addSleep(
+                                start = System.currentTimeMillis() - minutes * 60_000L,
+                                duration = minutes,
+                                note = null
+                            )
+                            viewModel.onLocalTimerStopped("Sleep")
+                        },
+                        onStart = { startTime, alarmMins ->
+                            viewModel.onTimerStarted("Sleep", startTime, alarmMins)
+                        },
+                        onRemoteStop = { minutes ->
+                            viewModel.onRemoteTimerStopped("Sleep", minutes)
+                        }
+                    )
 
                     Spacer(Modifier.height(4.dp))
                     Text(
