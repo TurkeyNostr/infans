@@ -12,5 +12,7 @@ local.properties
 *.aab
 *.keystore
 *.jks
+*.p12
+*.pfx
 keystore.properties
 app/build/
