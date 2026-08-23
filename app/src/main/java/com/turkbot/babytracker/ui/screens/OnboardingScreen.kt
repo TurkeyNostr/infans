@@ -697,6 +697,14 @@ private fun SetupNostrPage(
             selected = choice == NostrChoice.AMBER,
             onClick = { onChoice(NostrChoice.AMBER) }
         )
+        if (choice == NostrChoice.AMBER && amberInstalled) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Tip: When Amber asks, select \"Manual\" sign policy (not Basic) so Infans only gets the 3 permissions it needs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (choice == NostrChoice.AMBER && !amberInstalled) {
             Spacer(Modifier.height(4.dp))
             Text(

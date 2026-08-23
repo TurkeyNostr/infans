@@ -102,7 +102,8 @@ Each parent does this on their own phone:
    - **Generate New Key** (simplest)
    - **Import nsec** (if you already have a Nostr key)
    - **Log in with Amber** (recommended — key stays in Amber, and after you approve permissions once, Infans runs silently with no prompts)
-3. After login, you'll see your npub (`npub1...`) or NIP-05 (if you have one set up) in Settings → Nostr Identity.
+3. **If using Amber**: when the permission dialog appears, select **Manual** (the middle option, not Basic). Basic grants a fixed list of ~25 permissions including zap signing that Infans doesn't use. Manual saves only the 3 Infans needs: sign kind 30078, nip44_encrypt, nip44_decrypt. Tap the "Permissions" button to verify before tapping Connect.
+4. After login, you'll see your npub (`npub1...`) or NIP-05 (if you have one set up) in Settings → Nostr Identity.
 
 **Step 2 — Both parents add the child**
 
@@ -154,6 +155,7 @@ Both parents must link to each other. It's not one-directional.
 - **Data not appearing on the other phone**: Run the Sync Diagnostic on both phones. Check that both show "Connected" and "Mutual."
 - **Notes not syncing but feedings are**: This is a known issue being investigated. Export the debug log from both phones (Settings → Debug Log → Export) and share them.
 - **Amber prompts on every entry**: After updating to v1.8.6+, approve each permission type once with "remember my choice" in Amber. Subsequent operations run silently in the background. You can re-enable biometric approval in Amber after this.
+- **Amber shows too many permissions (zap, etc.)**: Amber's "Basic" sign policy grants a fixed list of ~25 permissions. Remove Infans from Amber (Settings → Applications → Infans → delete), then reconnect and select **Manual** instead of Basic. Manual saves only the 3 permissions Infans needs.
 - **Partner shows "No Infans Data"**: The other parent hasn't logged in or hasn't logged any data yet. Have them open the app and add at least one entry.
 
 **What if we want to stop syncing?**

@@ -340,6 +340,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Tip: In Amber, select \"Manual\" sign policy (not Basic) to limit permissions to only what Infans needs.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = {
