@@ -33,7 +33,7 @@ import java.util.zip.GZIPOutputStream
  *
  * Following Runstr's model:
  *   1. Collect all local data → JSON
- *   2. Gzip compress (NIP-44 has a 64KB payload limit)
+ *   2. Gzip compress (reduces payload size)
  *   3. NIP-44 self-encrypt (encrypt to your own pubkey)
  *   4. Publish as kind 30078 with d-tag "baby-tracker-backup"
  *
@@ -86,7 +86,7 @@ class BackupService(
                 tags = listOf(
                     listOf("d", BACKUP_D_TAG),
                     listOf("client", "Infans", "1.0.0"),
-                    listOf("encrypted", "nip44"),
+                    listOf("encrypted", "nip44v2"),
                     listOf("compression", "gzip"),
                     listOf("backup_version", "1")
                 )
@@ -200,7 +200,7 @@ class BackupService(
                     listOf("d", PARTNER_SYNC_D_TAG),
                     listOf("p", partnerPubkeyHex),
                     listOf("client", "Infans", "1.0.0"),
-                    listOf("encrypted", "nip44"),
+                    listOf("encrypted", "nip44v2"),
                     listOf("compression", "gzip"),
                     listOf("backup_version", "1")
                 )
@@ -271,7 +271,7 @@ class BackupService(
                     listOf("d", sessionDTag(session.label)),
                     listOf("p", partnerPubkeyHex),
                     listOf("client", "Infans", "1.0.0"),
-                    listOf("encrypted", "nip44")
+                    listOf("encrypted", "nip44v2")
                 )
             )
 

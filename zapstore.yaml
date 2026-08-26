@@ -28,6 +28,12 @@ description: |
 
   No telemetry, no analytics, no tracking. Your data stays yours — encrypted on Nostr relays you choose.
 
+  Medical Disclaimer:
+  Infans is a convenience tool for logging and syncing everyday baby-care records. It is NOT a medical device, medical application, or source of medical information. It does not provide medical advice, diagnosis, or treatment recommendations. Growth charts and percentile bands are derived from public WHO reference data for general informational purposes only and are not a substitute for assessment by a qualified healthcare professional. Always consult a licensed pediatrician for questions about your baby's health, growth, or development. The authors assume no responsibility for decisions made based on data displayed or stored by this app.
+
+  Security Notice:
+  This app has NOT undergone a third-party security audit. The cryptographic implementation (NIP-44 v2 encryption, key management, Nostr event signing) was written from scratch following published specifications and includes test vectors from the reference implementation, but has not been independently reviewed or verified by a security professional. No warranty is made about the fitness of this software for protecting sensitive data. Use at your own risk.
+
 # Category tags
 tags:
   - baby

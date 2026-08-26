@@ -109,7 +109,7 @@ This project borrows code, patterns, and ideas from the following open-source No
 
 ### NIP-44 Reference Implementation
 - **Specification**: https://github.com/nostr-protocol/nips/blob/master/44.md
-- **What we borrowed**: The NIP-44 v2 encryption scheme — ECDH shared secret computation, HKDF key derivation (RFC 5869, salt=zero-bytes, info="nip44-v2"), power-of-2 padding with 2-byte length prefix, and AES-256-GCM authenticated encryption. Implemented from scratch in `Nip44.kt` using BouncyCastle for ECDH (secp256k1-kmp's `ecdh()` returns SHA256(compressed_point) but NIP-44 requires the raw x-coordinate).
+- **What we borrowed**: The NIP-44 v2 encryption scheme — ECDH shared secret computation (unhashed x-coordinate), HKDF key derivation (RFC 5869, salt="nip44-v2" for extract, per-message expand with info=nonce), chunk-based power-of-2 padding with 2-byte/6-byte length prefix, ChaCha20 encryption (RFC 8439), and HMAC-SHA256 MAC. Implemented from scratch in `Nip44.kt` using BouncyCastle for ECDH (secp256k1-kmp's `ecdh()` returns SHA256(compressed_point) but NIP-44 requires the raw x-coordinate).
 - **License**: Public domain (specification)
 
 ### BIP-173 (Bech32)
@@ -120,6 +120,21 @@ This project borrows code, patterns, and ideas from the following open-source No
 ### Zapstore
 - **Website**: https://zapstore.dev
 - **What we borrowed**: App distribution — the "Install Amber" link in Settings points to `zapstore.dev/apps/com.greenart7c3.amber` for users who need a NIP-55 signer.
+
+## Medical Disclaimer
+
+Infans is a convenience tool for logging and syncing everyday baby-care records (feedings, sleep, weight, milestones, notes). It is **not** a medical device, medical application, or source of medical information.
+
+- This app does **not** provide medical advice, diagnosis, treatment recommendations, or health guidance of any kind.
+- Growth charts and percentile bands shown in the app are derived from public WHO reference data for general informational purposes only. They are **not** a substitute for assessment by a qualified healthcare professional.
+- Always consult a licensed pediatrician or other qualified medical professional for questions about your baby's health, growth, feeding, development, or any medical concerns.
+- The authors and contributors of this app assume no responsibility for decisions made based on data displayed or stored by Infans.
+
+## Security
+
+- This app has **not** undergone a third-party security audit.
+- The cryptographic implementation (NIP-44 v2 encryption, key management, Nostr event signing) was written from scratch following published specifications and includes test vectors from the reference implementation, but has not been independently reviewed or verified by a security professional.
+- No warranty is made about the fitness of this software for protecting sensitive data. Use at your own risk.
 
 ## Privacy
 

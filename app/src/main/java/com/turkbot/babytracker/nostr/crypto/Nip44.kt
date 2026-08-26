@@ -14,24 +14,31 @@ package com.turkbot.babytracker.nostr.crypto
 
 import org.bouncycastle.asn1.x9.X9ECParameters
 import org.bouncycastle.crypto.ec.CustomNamedCurves
+import org.bouncycastle.crypto.engines.ChaCha7539Engine
 import org.bouncycastle.crypto.params.ECDomainParameters
+import org.bouncycastle.crypto.params.KeyParameter
+import org.bouncycastle.crypto.params.ParametersWithIV
 import java.math.BigInteger
+import java.security.MessageDigest
 import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
+import java.util.Base64
+import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * NIP-44 v2 encryption / decryption.
+ * NIP-44 v2 encryption / decryption — spec-compliant implementation.
  *
- * This is the modern Nostr encryption standard used by both Runstr (for encrypted backup)
- * and nospeak (for gift-wrapped DMs).
+ * Spec: https://github.com/nostr-protocol/nips/blob/master/44.md
  *
- * Flow:
- *   1. ECDH: compute shared point = privkey_a * pubkey_b, take x-coordinate (32 bytes)
- *   2. HKDF: extract+expand to 32-byte encryption key
- *   3. AES-256-GCM: encrypt padded plaintext with random 32-byte nonce
- *   4. Encode: version(2) + nonce(32) + ciphertext+tag → base64
+ * Cryptographic scheme (version 0x02):
+ *   1. ECDH: shared_x = x-coordinate of (privkey_a * pubkey_b), unhashed, 32 bytes
+ *   2. HKDF-extract: conversation_key = HMAC-SHA256(salt="nip44-v2", IKM=shared_x)
+ *   3. Per-message HKDF-expand: 76 bytes from (PRK=conversation_key, info=nonce)
+ *      → chacha_key[0:32], chacha_nonce[32:44], hmac_key[44:76]
+ *   4. Pad: chunk-based power-of-2 padding with 2-byte (or 6-byte for >=64KB) length prefix
+ *   5. Encrypt: ChaCha20 (RFC 8439, counter=0) with chacha_key + chacha_nonce
+ *   6. MAC: HMAC-SHA256(hmac_key, concat(nonce, ciphertext))
+ *   7. Encode: base64(version(2) + nonce(32) + ciphertext + mac(32))
  *
  * For self-encryption (backup), privkey_a == privkey_b (encrypt to yourself).
  *
@@ -48,90 +55,44 @@ object Nip44 {
 
     private const val VERSION: Byte = 2
     private const val NONCE_LEN = 32
-    private const val TAG_BITS = 128 // GCM auth tag
+    private const val MAC_LEN = 32
+    private const val MIN_PAYLOAD_LEN = 99  // version(1) + nonce(32) + min_ciphertext(34) + mac(32)
+    private const val MIN_PLAINTEXT_SIZE = 1
+    private const val MAX_PLAINTEXT_SIZE = 4294967295
+    private const val EXTENDED_PREFIX_THRESHOLD = 65536
 
     /**
-     * Compute the ECDH shared secret (x-coordinate of the shared point).
-     * shared_point = privkey * pubkey
-     * conversation_key = shared_point.x (32 bytes)
+     * Per-message derived keys from HKDF-expand.
+     * - chachaKey:    32 bytes — ChaCha20 encryption key
+     * - chachaNonce:  12 bytes — ChaCha20 nonce (RFC 8439, 96-bit)
+     * - hmacKey:      32 bytes — HMAC-SHA256 key for MAC
      */
-    private fun computeEcdh(privKey: ByteArray, pubKey: ByteArray): ByteArray {
-        // Reconstruct the EC point from x-only public key.
-        // Prepend 0x02 (even y) to create a compressed point — BouncyCastle will decode it.
-        // The ECDH shared secret x-coordinate is the same regardless of y parity,
-        // since (priv * (x,y)) and (priv * (x,-y)) have the same x-coordinate.
-        val compressed = ByteArray(33)
-        compressed[0] = 0x02
-        System.arraycopy(pubKey, 0, compressed, 1, 32)
-        val point = curveParams.curve.decodePoint(compressed)
+    data class MessageKeys(
+        val chachaKey: ByteArray,
+        val chachaNonce: ByteArray,
+        val hmacKey: ByteArray
+    )
 
-        // Multiply: shared_point = privkey * pubkey_point
-        val privBigInt = BigInteger(1, privKey)
-        val sharedPoint = point.multiply(privBigInt).normalize()
-
-        // Extract x-coordinate (32 bytes)
-        return sharedPoint.affineXCoord.encoded
-    }
+    // ─── Public API ───────────────────────────────────────────
 
     /**
      * Encrypt plaintext for a recipient's public key.
+     * Returns base64-encoded NIP-44 v2 payload.
      */
     fun encrypt(plaintext: String, senderPrivKey: ByteArray, recipientPubKey: ByteArray): String {
-        // 1. ECDH shared secret
-        val conversationKey = computeEcdh(senderPrivKey, recipientPubKey)
-
-        // 2. HKDF to derive encryption key
-        val encKey = hkdfExtractExpand(conversationKey)
-
-        // 3. Generate random nonce
+        val conversationKey = getConversationKey(senderPrivKey, recipientPubKey)
         val nonce = ByteArray(NONCE_LEN)
         random.nextBytes(nonce)
-
-        // 4. Pad plaintext
-        val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
-        val padded = pad(plaintextBytes)
-
-        // 5. AES-256-GCM encrypt
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(encKey, "AES"), GCMParameterSpec(TAG_BITS, nonce))
-        val ciphertext = cipher.doFinal(padded)
-
-        // 6. Assemble: version + nonce + ciphertext
-        val payload = ByteArray(1 + NONCE_LEN + ciphertext.size)
-        payload[0] = VERSION
-        System.arraycopy(nonce, 0, payload, 1, NONCE_LEN)
-        System.arraycopy(ciphertext, 0, payload, 1 + NONCE_LEN, ciphertext.size)
-
-        return android.util.Base64.encodeToString(payload, android.util.Base64.NO_WRAP)
+        return encryptWithNonce(plaintext, conversationKey, nonce)
     }
 
     /**
      * Decrypt a base64-encoded NIP-44 v2 payload.
+     * Verifies MAC (constant-time) before decrypting.
      */
     fun decrypt(payload: String, recipientPrivKey: ByteArray, senderPubKey: ByteArray): String {
-        val bytes = android.util.Base64.decode(payload, android.util.Base64.NO_WRAP)
-        require(bytes.size > 1 + NONCE_LEN) { "Payload too short" }
-        require(bytes[0] == VERSION) { "Unsupported NIP-44 version: ${bytes[0]}" }
-
-        // 1. ECDH shared secret
-        val conversationKey = computeEcdh(recipientPrivKey, senderPubKey)
-
-        // 2. HKDF
-        val encKey = hkdfExtractExpand(conversationKey)
-
-        // 3. Extract nonce + ciphertext
-        val nonce = bytes.copyOfRange(1, 1 + NONCE_LEN)
-        val ciphertext = bytes.copyOfRange(1 + NONCE_LEN, bytes.size)
-
-        // 4. AES-256-GCM decrypt
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(encKey, "AES"), GCMParameterSpec(TAG_BITS, nonce))
-        val padded = cipher.doFinal(ciphertext)
-
-        // 5. Unpad
-        val plaintextBytes = unpad(padded)
-
-        return String(plaintextBytes, Charsets.UTF_8)
+        val conversationKey = getConversationKey(recipientPrivKey, senderPubKey)
+        return decryptWithKey(payload, conversationKey)
     }
 
     fun selfEncrypt(plaintext: String, privKey: ByteArray, pubKey: ByteArray): String =
@@ -140,60 +101,248 @@ object Nip44 {
     fun selfDecrypt(payload: String, privKey: ByteArray, pubKey: ByteArray): String =
         decrypt(payload, privKey, pubKey)
 
-    // ─── HKDF (RFC 5869) ──────────────────────────────────────
+    // ─── Internal (visible to unit tests) ─────────────────────
 
     /**
-     * HKDF extract+expand to produce a 32-byte encryption key.
-     * Per NIP-44 v2: salt = 32 zero bytes, info = "nip44-v2"
+     * Compute the long-term conversation key between two users.
+     * conversation_key = HKDF-extract(IKM=shared_x, salt=utf8("nip44-v2"))
+     * Symmetric: getConversationKey(a, B) == getConversationKey(b, A)
      */
-    private fun hkdfExtractExpand(ikm: ByteArray): ByteArray {
-        val salt = ByteArray(32) // all zeros
-        val info = "nip44-v2".toByteArray(Charsets.UTF_8)
-
-        // Extract
-        val prk = hmacSha256(salt, ikm)
-
-        // Expand to 32 bytes (we only need one key)
-        val t1 = hmacSha256(prk, info + byteArrayOf(1))
-        return t1.copyOfRange(0, 32)
+    internal fun getConversationKey(privKey: ByteArray, pubKey: ByteArray): ByteArray {
+        val sharedX = computeEcdh(privKey, pubKey)
+        return hkdfExtract(sharedX, "nip44-v2".toByteArray(Charsets.UTF_8))
     }
 
+    /**
+     * Encrypt with a pre-computed conversation key and explicit nonce.
+     * Used by [encrypt] with a random nonce; exposed for test-vector verification.
+     */
+    internal fun encryptWithNonce(plaintext: String, conversationKey: ByteArray, nonce: ByteArray): String {
+        val plaintextBytes = plaintext.toByteArray(Charsets.UTF_8)
+        require(plaintextBytes.size in MIN_PLAINTEXT_SIZE..MAX_PLAINTEXT_SIZE) {
+            "invalid plaintext length"
+        }
+        require(conversationKey.size == 32) { "invalid conversation_key length" }
+        require(nonce.size == NONCE_LEN) { "invalid nonce length" }
+
+        val keys = getMessageKeys(conversationKey, nonce)
+        val padded = pad(plaintextBytes)
+        val ciphertext = chacha20(keys.chachaKey, keys.chachaNonce, padded)
+        val mac = hmacSha256(keys.hmacKey, nonce + ciphertext)
+
+        // payload = version(1) + nonce(32) + ciphertext + mac(32)
+        val payload = ByteArray(1 + NONCE_LEN + ciphertext.size + MAC_LEN)
+        payload[0] = VERSION
+        System.arraycopy(nonce, 0, payload, 1, NONCE_LEN)
+        System.arraycopy(ciphertext, 0, payload, 1 + NONCE_LEN, ciphertext.size)
+        System.arraycopy(mac, 0, payload, 1 + NONCE_LEN + ciphertext.size, MAC_LEN)
+
+        return Base64.getEncoder().encodeToString(payload)
+    }
+
+    /**
+     * Decrypt with a pre-computed conversation key.
+     * Verifies MAC (constant-time) before decrypting.
+     */
+    internal fun decryptWithKey(payload: String, conversationKey: ByteArray): String {
+        require(conversationKey.size == 32) { "invalid conversation_key length" }
+
+        // 1. Check for non-base64 future-proof flag
+        if (payload.isEmpty() || payload[0] == '#') {
+            throw IllegalArgumentException("unknown version")
+        }
+
+        // 2. Validate minimum base64 length (prevents DoS on decoder)
+        require(payload.length >= 132) { "invalid payload size" }
+
+        // 3. Decode base64
+        val data = Base64.getDecoder().decode(payload)
+        require(data.size >= MIN_PAYLOAD_LEN) { "invalid data size" }
+
+        // 4. Check version
+        val version = data[0]
+        require(version == VERSION) { "unknown version $version" }
+
+        // 5. Extract fields: nonce(32) + ciphertext + mac(32)
+        val nonce = data.copyOfRange(1, 1 + NONCE_LEN)
+        val ciphertext = data.copyOfRange(1 + NONCE_LEN, data.size - MAC_LEN)
+        val mac = data.copyOfRange(data.size - MAC_LEN, data.size)
+
+        // 6. Derive keys and verify MAC (constant-time comparison)
+        val keys = getMessageKeys(conversationKey, nonce)
+        val expectedMac = hmacSha256(keys.hmacKey, nonce + ciphertext)
+        if (!MessageDigest.isEqual(expectedMac, mac)) {
+            throw IllegalArgumentException("invalid MAC")
+        }
+
+        // 7. Decrypt and unpad
+        val padded = chacha20(keys.chachaKey, keys.chachaNonce, ciphertext)
+        return String(unpad(padded), Charsets.UTF_8)
+    }
+
+    /**
+     * Derive per-message keys from conversation key + nonce.
+     * HKDF-expand(PRK=conversation_key, info=nonce, L=76) → 76 bytes
+     *   chacha_key   = bytes[0:32]
+     *   chacha_nonce = bytes[32:44]
+     *   hmac_key     = bytes[44:76]
+     */
+    internal fun getMessageKeys(conversationKey: ByteArray, nonce: ByteArray): MessageKeys {
+        require(conversationKey.size == 32) { "invalid conversation_key length" }
+        require(nonce.size == NONCE_LEN) { "invalid nonce length" }
+
+        val okm = hkdfExpand(conversationKey, nonce, 76)
+        return MessageKeys(
+            chachaKey = okm.copyOfRange(0, 32),
+            chachaNonce = okm.copyOfRange(32, 44),
+            hmacKey = okm.copyOfRange(44, 76)
+        )
+    }
+
+    /**
+     * NIP-44 v2 padded length calculation.
+     *
+     * Chunks: 32 bytes for small messages (next_power <= 256),
+     * next_power/8 for larger ones. Minimum padded size is 32.
+     */
+    internal fun calcPaddedLen(unpaddedLen: Int): Int {
+        if (unpaddedLen <= 32) return 32
+        // next power of 2 >= unpaddedLen
+        var nextPower = 32
+        while (nextPower < unpaddedLen) nextPower *= 2
+        val chunk = if (nextPower <= 256) 32 else nextPower / 8
+        return chunk * ((unpaddedLen - 1) / chunk + 1)
+    }
+
+    // ─── Private: ECDH ────────────────────────────────────────
+
+    /**
+     * Compute the ECDH shared secret (x-coordinate of the shared point).
+     * shared_point = privkey * pubkey → take x-coordinate (32 bytes, unhashed)
+     *
+     * We reconstruct the EC point from the x-only public key by prepending
+     * 0x02 (even y). The x-coordinate of the shared point is the same
+     * regardless of y parity: (k * (x,y)) and (k * (x,-y)) share the same x.
+     */
+    private fun computeEcdh(privKey: ByteArray, pubKey: ByteArray): ByteArray {
+        val compressed = ByteArray(33)
+        compressed[0] = 0x02
+        System.arraycopy(pubKey, 0, compressed, 1, 32)
+        val point = curveParams.curve.decodePoint(compressed)
+
+        val privBigInt = BigInteger(1, privKey)
+        val sharedPoint = point.multiply(privBigInt).normalize()
+
+        return sharedPoint.affineXCoord.encoded
+    }
+
+    // ─── Private: ChaCha20 (RFC 8439) ─────────────────────────
+
+    /**
+     * ChaCha20 stream cipher (RFC 8439, counter starts at 0).
+     * Symmetric: same function for encrypt and decrypt (XOR with keystream).
+     */
+    private fun chacha20(key: ByteArray, nonce: ByteArray, data: ByteArray): ByteArray {
+        val engine = ChaCha7539Engine()
+        engine.init(true, ParametersWithIV(KeyParameter(key), nonce))
+        val output = ByteArray(data.size)
+        engine.processBytes(data, 0, data.size, output, 0)
+        return output
+    }
+
+    // ─── Private: HMAC-SHA256 ─────────────────────────────────
+
     private fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
-        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(key, "HmacSHA256"))
         return mac.doFinal(data)
     }
 
-    // ─── Padding (NIP-44 v2) ──────────────────────────────────
+    // ─── Private: HKDF (RFC 5869) ─────────────────────────────
 
     /**
-     * NIP-44 v2 padding: pad to next power of 2, minimum 32 bytes.
-     * The padding format includes a 2-byte length prefix (big-endian) of the original size.
+     * HKDF-extract: PRK = HMAC-SHA256(salt, IKM)
      */
-    private fun pad(plaintext: ByteArray): ByteArray {
-        val size = plaintext.size
-        // Calculate padded size: next power of 2, minimum 32
-        val padSize: Int = when {
-            size <= 32 -> 32
-            else -> {
-                var next = 32
-                while (next < size) next *= 2
-                next
-            }
-        }
-
-        // Format: [2-byte big-endian original length] + [plaintext] + [zero padding]
-        val result = ByteArray(2 + padSize)
-        result[0] = ((size shr 8) and 0xff).toByte()
-        result[1] = (size and 0xff).toByte()
-        System.arraycopy(plaintext, 0, result, 2, size)
-        return result
+    private fun hkdfExtract(ikm: ByteArray, salt: ByteArray): ByteArray {
+        return hmacSha256(salt, ikm)
     }
 
-    private fun unpad(padded: ByteArray): ByteArray {
-        // Read 2-byte big-endian length prefix
-        val size = ((padded[0].toInt() and 0xff) shl 8) or (padded[1].toInt() and 0xff)
-        require(size >= 0 && size <= padded.size - 2) { "Invalid padded length" }
-        return padded.copyOfRange(2, 2 + size)
+    /**
+     * HKDF-expand: OKM = T(1) | T(2) | ... | T(N), truncated to L bytes
+     * where T(i) = HMAC-SHA256(PRK, T(i-1) | info | i)
+     */
+    private fun hkdfExpand(prk: ByteArray, info: ByteArray, length: Int): ByteArray {
+        val hashLen = 32
+        val n = (length + hashLen - 1) / hashLen
+        var t = ByteArray(0)
+        val okm = ByteArray(n * hashLen)
+        for (i in 1..n) {
+            t = hmacSha256(prk, t + info + byteArrayOf(i.toByte()))
+            System.arraycopy(t, 0, okm, (i - 1) * hashLen, hashLen)
+        }
+        return okm.copyOfRange(0, length)
+    }
+
+    // ─── Private: Padding (NIP-44 v2) ─────────────────────────
+
+    /**
+     * NIP-44 v2 padding:
+     * - 2-byte u16 big-endian length prefix (for plaintext < 65536)
+     * - 6-byte [0x00, 0x00, u32 big-endian] prefix (for plaintext >= 65536)
+     * - Padded to calcPaddedLen() with trailing zeros
+     */
+    internal fun pad(plaintext: ByteArray): ByteArray {
+        val unpaddedLen = plaintext.size
+        require(unpaddedLen in MIN_PLAINTEXT_SIZE..MAX_PLAINTEXT_SIZE) {
+            "invalid plaintext length"
+        }
+
+        val prefix: ByteArray = if (unpaddedLen >= EXTENDED_PREFIX_THRESHOLD) {
+            // 6-byte extended: [0x00, 0x00] + u32 big-endian
+            byteArrayOf(0, 0,
+                ((unpaddedLen shr 24) and 0xff).toByte(),
+                ((unpaddedLen shr 16) and 0xff).toByte(),
+                ((unpaddedLen shr 8) and 0xff).toByte(),
+                (unpaddedLen and 0xff).toByte()
+            )
+        } else {
+            // 2-byte u16 big-endian
+            byteArrayOf(
+                ((unpaddedLen shr 8) and 0xff).toByte(),
+                (unpaddedLen and 0xff).toByte()
+            )
+        }
+
+        val paddedLen = calcPaddedLen(unpaddedLen)
+        val suffix = ByteArray(paddedLen - unpaddedLen)
+        return prefix + plaintext + suffix
+    }
+
+    /**
+     * Remove NIP-44 v2 padding and validate structure.
+     * Throws on invalid padding (wrong length, zero plaintext, size mismatch).
+     */
+    internal fun unpad(padded: ByteArray): ByteArray {
+        require(padded.size >= 2) { "invalid padded data" }
+
+        val firstTwo = ((padded[0].toInt() and 0xff) shl 8) or (padded[1].toInt() and 0xff)
+
+        val (prefixLen, unpaddedLen) = if (firstTwo == 0) {
+            // Extended 6-byte prefix
+            require(padded.size >= 6) { "invalid padded data" }
+            val len = ((padded[2].toInt() and 0xff) shl 24) or
+                      ((padded[3].toInt() and 0xff) shl 16) or
+                      ((padded[4].toInt() and 0xff) shl 8) or
+                      (padded[5].toInt() and 0xff)
+            require(len >= EXTENDED_PREFIX_THRESHOLD) { "invalid padding" }
+            6 to len
+        } else {
+            2 to firstTwo
+        }
+
+        require(unpaddedLen > 0) { "invalid padding" }
+        require(padded.size == prefixLen + calcPaddedLen(unpaddedLen)) { "invalid padding" }
+
+        return padded.copyOfRange(prefixLen, prefixLen + unpaddedLen)
     }
 }

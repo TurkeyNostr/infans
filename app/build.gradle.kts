@@ -123,4 +123,10 @@ dependencies {
 
     // WorkManager for feeding reminders
     implementation(libs.work.runtime.ktx)
+
+    // Unit tests
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("fr.acinq.secp256k1:secp256k1-kmp:${libs.versions.secp256k1.get()}")
+    testImplementation("fr.acinq.secp256k1:secp256k1-kmp-jvm:${libs.versions.secp256k1.get()}")
+    testImplementation("org.bouncycastle:bcprov-jdk18on:${libs.versions.bouncyCastle.get()}")
 }
