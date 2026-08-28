@@ -7,19 +7,19 @@
 
 ## Features
 
-1. **Sleep timer start/stop times** — display both start and end times (e.g. "22:36 - 07:51 (9h 15m)") instead of just duration
+1. ~~**Sleep timer start/stop times** — display both start and end times (e.g. "22:36 - 07:51 (9h 15m)") instead of just duration~~ **Done** — SleepCard now shows "22:36 - 07:51" range + "(9h 15m)" duration. SummaryScreen activity list shows the same range.
 2. **Vaccine tracker** — track vaccine type, date administered, next dose. Add to existing Health tab
 3. **Multi-language support** — i18n/localization so users can pick their language
 4. **QR code partner pairing** — replace manual npub entry with QR scan
 5. **Partner pairing options** — support pasting npub, NIP-05 identifier, or scanning QR code
-6. **Export npub from app** — when a user generates an nsec in-app, add option to copy npub to clipboard for sharing
-7. **Swap default relay** — replace relay.primal.net with nostr.oxtr.dev (new users only, existing users keep their saved relays)
+6. ~~**Export npub from app** — when a user generates an nsec in-app, add option to copy npub to clipboard for sharing~~ **Done** — "Copy npub" / "Copy NIP-05" button added to Settings → Nostr Identity, copies to clipboard with haptic feedback.
+7. ~~**Swap default relay** — replace relay.primal.net with nostr.oxtr.dev (new users only, existing users keep their saved relays)~~ **Done** — defaultRelays now uses nostr.oxtr.dev instead of relay.primal.net. Existing users with saved relays are unaffected.
 8. **Frictionless onboarding for Nostr newcomers** — one-tap key generation, QR-first pairing, zero relay config, hide all Nostr jargon behind sensible defaults
 9. **Onboarding wizard** — step-by-step guided flow for key generation and partner pairing, clear non-technical language
 10. **Partner pairing approval flow** — one partner sends a request, the other approves it. No manual npub entry needed on receiving side. Uses NIP-17 gift-wrapped DM for the request
-11. **Show author on each entry** — display which parent logged each feeding, sleep, weight, diaper, etc. record
-12. **Haptic feedback on button presses** — tactile vibration on all interactive buttons
-13. **Haptic feedback toggle in settings** — switch to enable/disable haptics, default on
+11. ~~**Show author on each entry** — display which parent logged each feeding, sleep, weight, diaper, etc. record~~ **Done** — all 8 tracking entities now have an `authorPubkey` column (DB migration v4→v5). Each card displays "You" or "…abc12345" next to the timestamp.
+12. ~~**Haptic feedback on button presses** — tactile vibration on all interactive buttons~~ **Done** — HapticController utility created. All "Log X" buttons across 7 screens trigger a subtle haptic click (EFFECT_CLICK on API 29+, 10ms vibration fallback).
+13. ~~**Haptic feedback toggle in settings** — switch to enable/disable haptics, default on~~ **Done** — "Haptic Feedback" toggle added to Settings, stored in SharedPreferences, defaults to on.
 14. **Zapstore beta channel** — publish with `--channel beta`, opt-in toggle in settings (off by default), clearly labeled as beta
 15. **Built-in auto-updater (beta only)** — dormant unless beta toggle is enabled. Queries Nostr for beta channel release events (kind 30063), downloads APK, triggers install intent
 16. **Self-hosted strfry relay as default** — run a dedicated relay for Infans (and future apps), bundle URL as app default. Eliminates dependence on third-party relay policies

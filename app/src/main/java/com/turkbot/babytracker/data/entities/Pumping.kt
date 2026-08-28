@@ -34,5 +34,6 @@ data class Pumping(
     val unit: String,            // "ml" or "fl_oz"
     val duration: Int? = null,   // minutes
     val side: String? = null,    // "left", "right", "both"
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

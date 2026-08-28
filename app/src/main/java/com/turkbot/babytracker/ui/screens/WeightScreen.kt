@@ -33,6 +33,7 @@ import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
+import com.turkbot.babytracker.util.HapticController
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,8 +42,9 @@ import java.util.Locale
 @Composable
 fun WeightScreen(viewModel: BabyViewModel) {
     val weights by viewModel.weights.collectAsState()
-    var weightInput by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
+    var weightInput by remember { mutableStateOf("") }
     var weightUnit by remember { mutableStateOf(UnitPreferences.defaultWeightUnit(context)) }
     var heightInput by remember { mutableStateOf("") }
     var heightUnit by remember { mutableStateOf(UnitPreferences.defaultHeightUnit(context)) }
@@ -148,6 +150,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                                 }
                                 val hcUnit = if (headCircCm != null) headCircUnit else null
                                 viewModel.addWeight(valueKg, weightUnit, heightCm, hUnit, headCircCm, hcUnit)
+                                HapticController.click(context)
                                 weightInput = ""
                                 heightInput = ""
                                 headCircInput = ""
@@ -186,6 +189,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
             items(weights, key = { it.id }) { weight ->
                 WeightCard(
                     weight = weight,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteWeight(weight.id) },
                     onEditTime = { editingWeight = weight }
                 )
@@ -209,6 +213,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
 @Composable
 private fun WeightCard(
     weight: Weight,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -241,7 +246,8 @@ private fun WeightCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    formattedDate,
+                    formattedDate +
+                        (Units.fmtAuthor(weight.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

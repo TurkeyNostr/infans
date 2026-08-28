@@ -29,5 +29,6 @@ data class Bath(
     val childId: String,
     val time: Long,              // epoch millis
     val type: String,            // "full", "sponge", "tub"
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

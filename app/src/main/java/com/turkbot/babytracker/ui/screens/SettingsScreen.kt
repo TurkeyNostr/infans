@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -46,6 +47,7 @@ import com.turkbot.babytracker.nostr.RelayMatchResult
 import com.turkbot.babytracker.nostr.crypto.SignerType
 import com.turkbot.babytracker.nostr.relay.RelayState
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.HapticController
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -260,6 +262,23 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(8.dp))
+                        // ── Copy npub / NIP-05 to clipboard ──
+                        OutlinedButton(
+                            onClick = {
+                                val identity = myNip05 ?: signer!!.npub
+                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("npub", identity)
+                                )
+                                HapticController.click(context)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Copy ${if (myNip05 != null) "NIP-05" else "npub"}")
+                        }
                         Spacer(Modifier.height(16.dp))
                         // ── Export private key (local keys only) ──
                         if (signer!!.type != SignerType.AMBER) {
@@ -920,6 +939,50 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                 }
             }
         }
+        // ─── Haptics ──────────────────────────────────────
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var hapticsEnabled by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) {
+                hapticsEnabled = HapticController.isEnabled(context)
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Haptic Feedback",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Vibrate on button presses.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = hapticsEnabled,
+                        onCheckedChange = {
+                            hapticsEnabled = it
+                            HapticController.setEnabled(context, it)
+                            if (it) HapticController.click(context)
+                        }
+                    )
+                }
+            }
+        }
+
         // ─── Reminders ───────────────────────────────────
         item {
             SectionHeader("Reminders")

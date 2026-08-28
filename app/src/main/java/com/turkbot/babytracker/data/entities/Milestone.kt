@@ -27,5 +27,6 @@ data class Milestone(
     val childId: String,
     val date: Long,           // epoch millis
     val title: String,
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

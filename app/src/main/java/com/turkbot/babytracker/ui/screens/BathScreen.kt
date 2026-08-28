@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Bath
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.HapticController
+import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -51,6 +53,8 @@ private fun typeLabel(type: String): String = when (type) {
 @Composable
 fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val baths by viewModel.baths.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
 
     var selectedType by remember { mutableStateOf("full") }
     var noteText by remember { mutableStateOf("") }
@@ -118,6 +122,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                     type = selectedType,
                                     note = noteText.ifBlank { null }
                                 )
+                                HapticController.click(context)
                                 noteText = ""
                                 onSaved()
                             },
@@ -162,6 +167,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                 items(todayBaths, key = { it.id }) { bath ->
                     BathCard(
                         bath = bath,
+                        myPubkeyHex = signer?.pubkeyHex,
                         onDelete = { viewModel.deleteBath(bath.id) },
                         onEditTime = { editingBath = bath }
                     )
@@ -186,6 +192,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun BathCard(
     bath: Bath,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -209,7 +216,8 @@ private fun BathCard(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    timeFormat.format(Date(bath.time)),
+                    timeFormat.format(Date(bath.time)) +
+                        (Units.fmtAuthor(bath.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

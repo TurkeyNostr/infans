@@ -137,4 +137,21 @@ object Units {
         val remainingDays = days % 30
         return if (months > 0) "${months}mo ${remainingDays}d" else "${days}d"
     }
+
+    // ── Author display ──────────────────────────────────
+
+    /**
+     * Format an author pubkey for display.
+     * Returns null if the author is unknown (null pubkey — pre-migration rows
+     * or entries logged before a Nostr identity was set up).
+     *
+     * Compares the entry's author pubkey against the local user's pubkey.
+     * If it matches, returns "You". Otherwise, truncates the hex pubkey to
+     * the first 8 characters for a compact, privacy-preserving identifier.
+     */
+    fun fmtAuthor(authorPubkey: String?, myPubkeyHex: String?): String? {
+        if (authorPubkey == null) return null
+        if (authorPubkey == myPubkeyHex) return "You"
+        return "…" + authorPubkey.take(8)
+    }
 }

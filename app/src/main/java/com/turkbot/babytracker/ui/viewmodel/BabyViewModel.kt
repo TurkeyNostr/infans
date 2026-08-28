@@ -129,6 +129,7 @@ class BabyViewModel(
             Log.w(TAG, "addFeeding: no active child — not saving")
             return false
         }
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveFeeding(Feeding(
                 id = UUID.randomUUID().toString(),
@@ -139,7 +140,8 @@ class BabyViewModel(
                 unit = unit,
                 breastSide = breastSide,
                 duration = duration,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -170,13 +172,15 @@ class BabyViewModel(
     // ── Sleep ─────────────────────────────────────────
     fun addSleep(start: Long, duration: Int, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveSleep(Sleep(
                 id = UUID.randomUUID().toString(),
                 childId = child.id,
                 start = start,
                 duration = duration,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -209,6 +213,7 @@ class BabyViewModel(
      */
     fun onRemoteTimerStopped(label: String, durationMinutes: Int) {
         viewModelScope.launch {
+            val author = nostr.signer.value?.pubkeyHex
             // Log the record (same as local stop)
             when (label.lowercase()) {
                 "sleep" -> {
@@ -218,7 +223,8 @@ class BabyViewModel(
                         childId = child.id,
                         start = System.currentTimeMillis() - durationMinutes * 60_000L,
                         duration = durationMinutes,
-                        note = null
+                        note = null,
+                        authorPubkey = author
                     ))
                 }
                 "breast" -> {
@@ -232,7 +238,8 @@ class BabyViewModel(
                         unit = "min",
                         breastSide = null,
                         duration = durationMinutes,
-                        note = null
+                        note = null,
+                        authorPubkey = author
                     ))
                 }
             }
@@ -262,6 +269,7 @@ class BabyViewModel(
     // ── Weight ────────────────────────────────────────
     fun addWeight(valueKg: Double, unit: String, heightCm: Double?, heightUnit: String?, headCircCm: Double?, headCircUnit: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveWeight(Weight(
                 id = UUID.randomUUID().toString(),
@@ -272,7 +280,8 @@ class BabyViewModel(
                 height = heightCm,
                 heightUnit = heightUnit,
                 headCirc = headCircCm,
-                headCircUnit = headCircUnit
+                headCircUnit = headCircUnit,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -295,13 +304,15 @@ class BabyViewModel(
     // ── Milestones ────────────────────────────────────
     fun addMilestone(title: String, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveMilestone(Milestone(
                 id = UUID.randomUUID().toString(),
                 childId = child.id,
                 date = System.currentTimeMillis(),
                 title = title,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -324,6 +335,7 @@ class BabyViewModel(
     // ── Diaper ────────────────────────────────────────
     fun addDiaper(contents: String, color: String?, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveDiaper(Diaper(
                 id = UUID.randomUUID().toString(),
@@ -331,7 +343,8 @@ class BabyViewModel(
                 time = System.currentTimeMillis(),
                 contents = contents,
                 color = color,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -354,6 +367,7 @@ class BabyViewModel(
     // ── Pumping ───────────────────────────────────────
     fun addPumping(amountMl: Double, unit: String, duration: Int?, side: String?, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.savePumping(Pumping(
                 id = UUID.randomUUID().toString(),
@@ -363,7 +377,8 @@ class BabyViewModel(
                 unit = unit,
                 duration = duration,
                 side = side,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -386,6 +401,7 @@ class BabyViewModel(
     // ── Health records ────────────────────────────────
     fun addHealthRecord(temperature: Double?, medication: String?, dose: String?, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveHealthRecord(HealthRecord(
                 id = UUID.randomUUID().toString(),
@@ -394,7 +410,8 @@ class BabyViewModel(
                 temperature = temperature,
                 medication = medication,
                 dose = dose,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }
@@ -417,13 +434,15 @@ class BabyViewModel(
     // ── Baths ─────────────────────────────────────────
     fun addBath(type: String, note: String?) {
         val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveBath(Bath(
                 id = UUID.randomUUID().toString(),
                 childId = child.id,
                 time = System.currentTimeMillis(),
                 type = type,
-                note = note
+                note = note,
+                authorPubkey = author
             ))
             nostr.exportBackup()
         }

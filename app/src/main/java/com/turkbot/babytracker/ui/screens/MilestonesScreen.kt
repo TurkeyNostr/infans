@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Milestone
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.HapticController
+import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +39,8 @@ import java.util.Locale
 @Composable
 fun MilestonesScreen(viewModel: BabyViewModel) {
     val milestones by viewModel.milestones.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
     var title by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var editingMilestone by remember { mutableStateOf<Milestone?>(null) }
@@ -82,6 +86,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
                         onClick = {
                             if (title.isNotBlank()) {
                                 viewModel.addMilestone(title.trim(), note.trim().ifBlank { null })
+                                HapticController.click(context)
                                 title = ""
                                 note = ""
                             }
@@ -119,6 +124,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
             items(milestones, key = { it.id }) { milestone ->
                 MilestoneCard(
                     milestone = milestone,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteMilestone(milestone.id) },
                     onEditTime = { editingMilestone = milestone }
                 )
@@ -142,6 +148,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
 @Composable
 private fun MilestoneCard(
     milestone: Milestone,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -175,7 +182,8 @@ private fun MilestoneCard(
                     color = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 Text(
-                    formattedDate,
+                    formattedDate +
+                        (Units.fmtAuthor(milestone.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
                 )

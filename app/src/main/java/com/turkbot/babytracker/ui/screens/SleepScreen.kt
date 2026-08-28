@@ -33,6 +33,7 @@ import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.components.LiveTimer
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
+import com.turkbot.babytracker.util.HapticController
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,7 +44,9 @@ fun SleepScreen(viewModel: BabyViewModel) {
     val sleeps by viewModel.sleeps.collectAsState()
     val remoteSleepSession by viewModel.remoteSleepSession.collectAsState()
     val forceStopSleep by viewModel.forceStopSleep.collectAsState()
+    val signer by viewModel.signer.collectAsState()
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var startText by remember {
         mutableStateOf(
@@ -163,6 +166,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     Button(
                         onClick = {
                             if (totalMinutes > 0) {
+                                HapticController.click(context)
                                 viewModel.addSleep(
                                     start = parseStartToEpoch(startText),
                                     duration = totalMinutes,
@@ -210,6 +214,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                 SleepCard(
                     sleep = sleep,
                     timeFormat = timeFormat,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteSleep(sleep.id) },
                     onEditTime = { editingSleep = sleep }
                 )
@@ -234,9 +239,12 @@ fun SleepScreen(viewModel: BabyViewModel) {
 private fun SleepCard(
     sleep: Sleep,
     timeFormat: SimpleDateFormat,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
+    val endTimeMillis = sleep.start + sleep.duration * 60_000L
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -249,13 +257,17 @@ private fun SleepCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                // "22:36 - 07:51" start–stop range
                 Text(
-                    timeFormat.format(Date(sleep.start)),
+                    "${timeFormat.format(Date(sleep.start))} - ${timeFormat.format(Date(endTimeMillis))}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
+                // "(9h 15m)" duration + author
+                val authorLabel = Units.fmtAuthor(sleep.authorPubkey, myPubkeyHex)
                 Text(
-                    Units.fmtDuration(sleep.duration),
+                    if (authorLabel != null) "(${Units.fmtDuration(sleep.duration)}) · $authorLabel"
+                    else "(${Units.fmtDuration(sleep.duration)})",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -524,10 +524,11 @@ fun SummaryScreen(
                 )
             }
             items(todaySleeps) { s ->
+                val sleepEnd = s.start + s.duration * 60_000L
                 ActivityRow(
                     icon = Icons.Default.Bedtime,
                     title = "Sleep · ${Units.fmtDuration(s.duration)}",
-                    subtitle = timeFmt.format(Date(s.start)),
+                    subtitle = "${timeFmt.format(Date(s.start))} - ${timeFmt.format(Date(sleepEnd))}",
                     onDelete = { viewModel.deleteSleep(s.id) },
                     onEditTime = { editingSleep = s },
                     iconTint = MaterialTheme.colorScheme.tertiary

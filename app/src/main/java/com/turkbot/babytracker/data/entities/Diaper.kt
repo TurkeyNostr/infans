@@ -30,5 +30,6 @@ data class Diaper(
     val time: Long,              // epoch millis
     val contents: String,        // "wet", "dirty", "mixed", "dry"
     val color: String? = null,   // stool color for dirty/mixed
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

@@ -33,6 +33,7 @@ import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.UnitPreferences
 import com.turkbot.babytracker.util.Units
+import com.turkbot.babytracker.util.HapticController
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -44,6 +45,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val healthRecords by viewModel.healthRecords.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
     var temperatureText by remember { mutableStateOf("") }
     var tempUnit by remember { mutableStateOf(UnitPreferences.defaultTempUnit(context)) }
     val tempUnits = listOf("C", "F")
@@ -160,6 +162,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                 dose = doseText.ifBlank { null },
                                 note = noteText.ifBlank { null }
                             )
+                            HapticController.click(context)
                             temperatureText = ""
                             medicationText = ""
                             doseText = ""
@@ -208,6 +211,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayRecords, key = { it.id }) { record ->
                 HealthRecordCard(
                     record = record,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteHealthRecord(record.id) },
                     onEditTime = { editingRecord = record }
                 )
@@ -231,6 +235,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun HealthRecordCard(
     record: HealthRecord,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -277,7 +282,8 @@ private fun HealthRecordCard(
                 }
                 // Time
                 Text(
-                    timeFormat.format(Date(record.time)),
+                    timeFormat.format(Date(record.time)) +
+                        (Units.fmtAuthor(record.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

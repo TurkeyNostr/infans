@@ -26,6 +26,7 @@ data class Sleep(
     val id: String,
     val childId: String,
     val start: Long,          // epoch millis
-    val duration: Int,        // minutes
-    val note: String? = null
+    val duration: Int,             // minutes
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

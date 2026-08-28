@@ -31,5 +31,6 @@ data class Feeding(
     val unit: String? = null,   // "ml", "fl_oz", "min", "g"
     val breastSide: String? = null, // "left", "right", "both" — breast only
     val duration: Int? = null,     // minutes — breast only
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

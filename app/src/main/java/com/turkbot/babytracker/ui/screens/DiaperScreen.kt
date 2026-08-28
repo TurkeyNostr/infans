@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.turkbot.babytracker.data.entities.Diaper
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.HapticController
+import com.turkbot.babytracker.util.Units
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -67,6 +69,8 @@ private fun colorLabel(color: String): String = when (color) {
 @Composable
 fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val diapers by viewModel.diapers.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
 
     var selectedContents by remember { mutableStateOf("wet") }
     var selectedColor by remember { mutableStateOf("yellow") }
@@ -174,6 +178,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                             } else {
                                 null
                             }
+                            HapticController.click(context)
                             viewModel.addDiaper(
                                 contents = selectedContents,
                                 color = color,
@@ -223,6 +228,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayDiapers, key = { it.id }) { diaper ->
                 DiaperCard(
                     diaper = diaper,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteDiaper(diaper.id) },
                     onEditTime = { editingDiaper = diaper }
                 )
@@ -246,6 +252,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun DiaperCard(
     diaper: Diaper,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -276,7 +283,8 @@ private fun DiaperCard(
                     )
                 }
                 Text(
-                    timeFormat.format(Date(diaper.time)),
+                    timeFormat.format(Date(diaper.time)) +
+                        (Units.fmtAuthor(diaper.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

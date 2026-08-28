@@ -34,5 +34,6 @@ data class HealthRecord(
     val temperature: Double? = null,   // °C
     val medication: String? = null,    // medication name
     val dose: String? = null,          // dose description
-    val note: String? = null
+    val note: String? = null,
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

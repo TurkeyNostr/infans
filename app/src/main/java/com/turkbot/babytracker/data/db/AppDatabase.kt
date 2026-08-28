@@ -34,7 +34,7 @@ import com.turkbot.babytracker.data.entities.*
         HealthRecord::class,
         Bath::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -91,6 +91,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 4→5: add authorPubkey column to all tracking tables so
+         * each entry shows which parent logged it. Existing rows get NULL
+         * (unknown author — data pre-dates this feature). No data loss.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE feedings ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE sleeps ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE weights ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE milestones ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE diapers ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE pumpings ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE health_records ADD COLUMN authorPubkey TEXT")
+                db.execSQL("ALTER TABLE baths ADD COLUMN authorPubkey TEXT")
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -98,7 +116,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "baby-tracker"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build().also {
                     INSTANCE = it

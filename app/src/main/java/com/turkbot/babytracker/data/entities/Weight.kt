@@ -33,5 +33,6 @@ data class Weight(
     val height: Double? = null,   // cm
     val heightUnit: String? = null, // "cm" or "in"
     val headCirc: Double? = null,   // cm — head circumference
-    val headCircUnit: String? = null // "cm" or "in"
+    val headCircUnit: String? = null, // "cm" or "in"
+    val authorPubkey: String? = null  // hex pubkey of the parent who logged this
 )

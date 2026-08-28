@@ -33,6 +33,7 @@ import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
+import com.turkbot.babytracker.util.HapticController
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -45,9 +46,10 @@ private val PUMP_SIDES = listOf("left", "right", "both")
 @Composable
 fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val pumpings by viewModel.pumpings.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val signer by viewModel.signer.collectAsState()
 
     var amountText by remember { mutableStateOf("") }
-    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedUnit by remember { mutableStateOf(UnitPreferences.defaultPumpUnit(context)) }
     var selectedSide by remember { mutableStateOf("left") }
     var durationText by remember { mutableStateOf("") }
@@ -161,6 +163,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                     side = selectedSide,
                                     note = noteText.ifBlank { null }
                                 )
+                                HapticController.click(context)
                                 amountText = ""
                                 durationText = ""
                                 noteText = ""
@@ -208,6 +211,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             items(todayPumpings, key = { it.id }) { pumping ->
                 PumpingCard(
                     pumping = pumping,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deletePumping(pumping.id) },
                     onEditTime = { editingPumping = pumping }
                 )
@@ -231,6 +235,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
 @Composable
 private fun PumpingCard(
     pumping: Pumping,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit
 ) {
@@ -273,7 +278,8 @@ private fun PumpingCard(
                     )
                 }
                 Text(
-                    timeFormat.format(Date(pumping.time)),
+                    timeFormat.format(Date(pumping.time)) +
+                        (Units.fmtAuthor(pumping.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

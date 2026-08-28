@@ -36,6 +36,7 @@ import com.turkbot.babytracker.ui.components.LiveTimer
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
 import com.turkbot.babytracker.util.UnitPreferences
+import com.turkbot.babytracker.util.HapticController
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -52,6 +53,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
     val feedings by viewModel.feedings.collectAsState()
     val remoteBreastSession by viewModel.remoteBreastSession.collectAsState()
     val forceStopBreast by viewModel.forceStopBreast.collectAsState()
+    val signer by viewModel.signer.collectAsState()
 
     var selectedType by remember { mutableStateOf("bottle") }
     var amountText by remember { mutableStateOf("") }
@@ -261,6 +263,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 note = noteText.ifBlank { null }
                             )
                             if (saved) {
+                                HapticController.click(context)
                                 amountText = ""
                                 durationText = ""
                                 noteText = ""
@@ -309,6 +312,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
             items(todayFeedings, key = { it.id }) { feeding ->
                 FeedingCard(
                     feeding = feeding,
+                    myPubkeyHex = signer?.pubkeyHex,
                     onDelete = { viewModel.deleteFeeding(feeding.id) },
                     onEditTime = { editingFeeding = feeding },
                     onEditFields = { editingFeedingFields = feeding }
@@ -348,6 +352,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
 @Composable
 private fun FeedingCard(
     feeding: Feeding,
+    myPubkeyHex: String?,
     onDelete: () -> Unit,
     onEditTime: () -> Unit,
     onEditFields: () -> Unit
@@ -392,7 +397,8 @@ private fun FeedingCard(
                     )
                 }
                 Text(
-                    timeFormat.format(Date(feeding.time)),
+                    timeFormat.format(Date(feeding.time)) +
+                        (Units.fmtAuthor(feeding.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
