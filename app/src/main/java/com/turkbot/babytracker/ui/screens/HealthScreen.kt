@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Vaccines
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,6 +55,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     var noteText by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<HealthRecord?>(null) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     val todayRecords = remember(healthRecords) {
         val cal = Calendar.getInstance()
@@ -66,6 +68,23 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = selectedTab) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Health") },
+                icon = { Icon(Icons.Default.HealthAndSafety, contentDescription = null) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Vaccines") },
+                icon = { Icon(Icons.Default.Vaccines, contentDescription = null) }
+            )
+        }
+
+        if (selectedTab == 0) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -229,6 +248,11 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                 }
             )
         }
+        } // end if selectedTab == 0
+        if (selectedTab == 1) {
+            VaccineSection(viewModel)
+        }
+    } // end Column
     }
 }
 

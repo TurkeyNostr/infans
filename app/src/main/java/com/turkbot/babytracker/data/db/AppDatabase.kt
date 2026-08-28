@@ -33,8 +33,9 @@ import com.turkbot.babytracker.data.entities.*
         Pumping::class,
         HealthRecord::class,
         Bath::class,
+        Vaccine::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -48,6 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pumpingDao(): PumpingDao
     abstract fun healthRecordDao(): HealthRecordDao
     abstract fun bathDao(): BathDao
+    abstract fun vaccineDao(): VaccineDao
 
     companion object {
         @Volatile
@@ -109,6 +111,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration 5→6: create the vaccines table for tracking vaccinations.
+         * All existing data is preserved.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS vaccines (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        childId TEXT NOT NULL,
+                        vaccineType TEXT NOT NULL,
+                        dateAdministered INTEGER NOT NULL,
+                        nextDueDate INTEGER,
+                        doseNumber TEXT,
+                        note TEXT,
+                        authorPubkey TEXT
+                    )"""
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -116,7 +139,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "baby-tracker"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration()
                 .build().also {
                     INSTANCE = it

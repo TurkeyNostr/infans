@@ -81,6 +81,10 @@ class BabyViewModel(
         .filterNotNull().flatMapLatest { repo.baths(it.id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val vaccines: StateFlow<List<Vaccine>> = activeChild
+        .filterNotNull().flatMapLatest { repo.vaccines(it.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val notes: StateFlow<List<Note>> = repo.notes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -462,6 +466,39 @@ class BabyViewModel(
         }
     }
 
+    // ── Vaccines ───────────────────────────────────────
+    fun addVaccine(vaccineType: String, dateAdministered: Long, nextDueDate: Long?, doseNumber: String?, note: String?) {
+        val child = activeChild.value ?: return
+        val author = nostr.signer.value?.pubkeyHex
+        viewModelScope.launch {
+            repo.saveVaccine(Vaccine(
+                id = UUID.randomUUID().toString(),
+                childId = child.id,
+                vaccineType = vaccineType,
+                dateAdministered = dateAdministered,
+                nextDueDate = nextDueDate,
+                doseNumber = doseNumber,
+                note = note,
+                authorPubkey = author
+            ))
+            nostr.exportBackup()
+        }
+    }
+
+    fun deleteVaccine(id: String) {
+        viewModelScope.launch {
+            repo.deleteVaccine(id)
+            nostr.exportBackup()
+        }
+    }
+
+    fun updateVaccineDate(id: String, date: Long) {
+        viewModelScope.launch {
+            repo.updateVaccineDate(id, date)
+            nostr.exportBackup()
+        }
+    }
+
     // ── Nostr ─────────────────────────────────────────
     fun generateNostrIdentity() {
         viewModelScope.launch { nostr.generateIdentity() }
@@ -650,7 +687,8 @@ class BabyViewModel(
         nostr.restoreFromBackupPayload(payload)
         return payload.children.size + payload.feedings.size + payload.sleeps.size +
                payload.weights.size + payload.milestones.size + payload.diapers.size +
-               payload.pumpings.size + payload.healthRecords.size
+               payload.pumpings.size + payload.healthRecords.size +
+               payload.baths.size + payload.vaccines.size
     }
 }
 

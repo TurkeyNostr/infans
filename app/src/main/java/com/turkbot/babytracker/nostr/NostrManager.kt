@@ -1144,7 +1144,7 @@ class NostrManager(context: Context) {
      * Restore data from a decrypted backup payload into local Room database.
      */
     private suspend fun restoreFromPayload(payload: BackupPayload) {
-        Dbg.info(Cat.SYNC, "restoreFromPayload: v${payload.version}, ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.diapers.size} diapers, ${payload.pumpings.size} pumpings, ${payload.healthRecords.size} health, ${payload.notes.size} notes, ${payload.baths.size} baths")
+        Dbg.info(Cat.SYNC, "restoreFromPayload: v${payload.version}, ${payload.children.size} children, ${payload.feedings.size} feedings, ${payload.sleeps.size} sleeps, ${payload.weights.size} weights, ${payload.diapers.size} diapers, ${payload.pumpings.size} pumpings, ${payload.healthRecords.size} health, ${payload.notes.size} notes, ${payload.baths.size} baths, ${payload.vaccines.size} vaccines")
         payload.children.forEach { repo.saveChild(it) }
         payload.feedings.forEach { repo.saveFeeding(it) }
         payload.sleeps.forEach { repo.saveSleep(it) }
@@ -1154,6 +1154,7 @@ class NostrManager(context: Context) {
         payload.pumpings.forEach { repo.savePumping(it) }
         payload.healthRecords.forEach { repo.saveHealthRecord(it) }
         payload.baths.forEach { repo.saveBath(it) }
+        payload.vaccines.forEach { repo.saveVaccine(it) }
         payload.notes.forEach {
             Dbg.info(Cat.SYNC, "Restoring note ${it.id.take(8)} by ${it.authorPubkey.take(8)} (${it.content.length} chars)")
             repo.saveNote(it)

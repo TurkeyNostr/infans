@@ -124,6 +124,14 @@ dependencies {
     // WorkManager for feeding reminders
     implementation(libs.work.runtime.ktx)
 
+    // QR code generation (ZXing) + camera scanning (CameraX + ML Kit)
+    implementation(libs.zxing.core)
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.mlkit.scanning)
+
     // Unit tests
     testImplementation("junit:junit:4.13.2")
     testImplementation("fr.acinq.secp256k1:secp256k1-kmp:${libs.versions.secp256k1.get()}")

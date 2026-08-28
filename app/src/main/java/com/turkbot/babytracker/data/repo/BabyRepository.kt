@@ -35,6 +35,7 @@ class BabyRepository(context: Context) {
     private val pumpingDao = db.pumpingDao()
     private val healthRecordDao = db.healthRecordDao()
     private val bathDao = db.bathDao()
+    private val vaccineDao = db.vaccineDao()
 
     // ── Children ──────────────────────────────────────
     fun children(): Flow<List<Child>> = childDao.getAll()
@@ -109,6 +110,13 @@ class BabyRepository(context: Context) {
     suspend fun deleteBath(id: String) = bathDao.delete(id)
     suspend fun allBaths(): List<Bath> = bathDao.getAll()
 
+    // ── Vaccines ───────────────────────────────────────
+    fun vaccines(childId: String): Flow<List<Vaccine>> = vaccineDao.getByChild(childId)
+    suspend fun saveVaccine(v: Vaccine) = vaccineDao.insert(v)
+    suspend fun updateVaccineDate(id: String, date: Long) = vaccineDao.updateDate(id, date)
+    suspend fun deleteVaccine(id: String) = vaccineDao.delete(id)
+    suspend fun allVaccines(): List<Vaccine> = vaccineDao.getAll()
+
     // ── Backup / restore helpers ──────────────────────
     suspend fun collectAllData(): BackupPayload {
         return BackupPayload(
@@ -123,7 +131,8 @@ class BabyRepository(context: Context) {
             pumpings = pumpingDao.getAll(),
             healthRecords = healthRecordDao.getAll(),
             notes = noteDao.getAllList(),
-            baths = bathDao.getAll()
+            baths = bathDao.getAll(),
+            vaccines = vaccineDao.getAll()
         )
     }
 }
@@ -133,7 +142,7 @@ class BabyRepository(context: Context) {
  */
 @kotlinx.serialization.Serializable
 data class BackupPayload(
-    val version: Int = 3,
+    val version: Int = 4,
     val exportedAt: Long,
     val children: List<Child>,
     val feedings: List<Feeding>,
@@ -144,5 +153,6 @@ data class BackupPayload(
     val pumpings: List<Pumping> = emptyList(),
     val healthRecords: List<HealthRecord> = emptyList(),
     val notes: List<Note> = emptyList(),
-    val baths: List<Bath> = emptyList()
+    val baths: List<Bath> = emptyList(),
+    val vaccines: List<Vaccine> = emptyList()
 )

@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material3.*
@@ -72,6 +74,8 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
     var amberError by rememberSaveable { mutableStateOf<String?>(null) }
     var partnerNpubInput by rememberSaveable { mutableStateOf("") }
     var partnerError by rememberSaveable { mutableStateOf<String?>(null) }
+    var showQrScanner by remember { mutableStateOf(false) }
+    var showMyQr by remember { mutableStateOf(false) }
 
     val dateFmt = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
     var amberInstalled by remember { mutableStateOf(viewModel.isAmberInstalled()) }
@@ -278,6 +282,16 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Copy ${if (myNip05 != null) "NIP-05" else "npub"}")
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        // ── Show QR code for pairing ──
+                        OutlinedButton(
+                            onClick = { showMyQr = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.QrCode, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Show My QR")
                         }
                         Spacer(Modifier.height(16.dp))
                         // ── Export private key (local keys only) ──
@@ -552,27 +566,40 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 )
                             }
                             Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    val input = partnerNpubInput.trim()
-                                    if (input.isEmpty()) {
-                                        partnerError = "Enter an npub or NIP-05 identifier"
-                                    } else {
-                                        scope.launch {
-                                            val success = viewModel.setPartnerIdentifier(input)
-                                            if (success) {
-                                                partnerNpubInput = ""
-                                                // Trigger a backup so the partner gets our data immediately
-                                                viewModel.exportBackup()
-                                            } else {
-                                                partnerError = "Could not resolve — check the identifier"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showQrScanner = true },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Scan QR")
+                                }
+                                Button(
+                                    onClick = {
+                                        val input = partnerNpubInput.trim()
+                                        if (input.isEmpty()) {
+                                            partnerError = "Enter an npub or NIP-05 identifier"
+                                        } else {
+                                            scope.launch {
+                                                val success = viewModel.setPartnerIdentifier(input)
+                                                if (success) {
+                                                    partnerNpubInput = ""
+                                                    // Trigger a backup so the partner gets our data immediately
+                                                    viewModel.exportBackup()
+                                                } else {
+                                                    partnerError = "Could not resolve — check the identifier"
+                                                }
                                             }
                                         }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Link Partner")
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Link Partner")
+                                }
                             }
                         }
                     } else {
@@ -1764,13 +1791,54 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             }
         )
     }
+
+    // ── QR Scanner overlay ──
+    if (showQrScanner) {
+        com.turkbot.babytracker.ui.components.QrScanner(
+            onScanned = { result ->
+                showQrScanner = false
+                partnerNpubInput = result
+                // Auto-attempt link after scan
+                scope.launch {
+                    val success = viewModel.setPartnerIdentifier(result.trim())
+                    if (success) {
+                        partnerNpubInput = ""
+                        viewModel.exportBackup()
+                    } else {
+                        partnerError = "Could not resolve scanned QR — check with partner"
+                    }
+                }
+            },
+            onDismiss = { showQrScanner = false }
+        )
+    }
+
+    // ── Show My QR dialog ──
+    if (showMyQr && signer != null) {
+        val identity = nostrManager.signer.value?.let {
+            nostrManager.myNip05.value ?: it.npub
+        } ?: ""
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showMyQr = false },
+            confirmButton = {
+                TextButton(onClick = { showMyQr = false }) { Text("Close") }
+            },
+            title = { Text("Your QR Code") },
+            text = {
+                com.turkbot.babytracker.ui.components.QrCodeDisplay(
+                    content = identity,
+                    caption = "Have the other parent scan this to link."
+                )
+            }
+        )
+    }
 }
 
 @Composable
 private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleMedium,
+     Text(
+         title,
+         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 8.dp)

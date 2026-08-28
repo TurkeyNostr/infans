@@ -39,8 +39,10 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +51,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -88,28 +91,26 @@ import java.util.Locale
 // ──────────────────────────────────────────────────────────────────────────────
 
 private enum class OnboardPage {
-    WELCOME, ADD_CHILD, UNITS, CHOOSE_MODE, SETUP_NOSTR, SETUP_PARTNER, DONE
+    WELCOME, ADD_CHILD, UNITS, CHOOSE_SYNC, SET_UP_KEY, PAIR_PARTNER, DONE
 }
 
 private enum class SyncMode(val label: String, val icon: ImageVector, val desc: String) {
     OFFLINE(
-        "Offline Only",
+        "Just This Phone",
         Icons.Filled.CloudOff,
-        "Data stays on this phone. No accounts, no internet. Use Settings to enable backup later."
+        "Data stays on this phone. No accounts, no internet. You can enable backup later."
     ),
-    RELAY_SOLO(
-        "Relay Backup",
-        Icons.Filled.CloudUpload,
-        "Encrypted backups to Nostr relays. Restore on a new phone by logging in with the same key."
+    BACKUP(
+        "Auto-Backup",
+        Icons.Filled.Key,
+        "Your data is encrypted and backed up automatically. Restore on a new phone with the same key."
     ),
-    PARTNER(
-        "Partner Sync",
+    PAIR(
+        "Sync With Partner",
         Icons.Filled.People,
-        "Everything in Relay Backup, plus automatic sync with the other parent's phone."
+        "Everything in Auto-Backup, plus automatic sync with the other parent's phone."
     )
 }
-
-private enum class NostrChoice { GENERATE, IMPORT, AMBER, SKIP }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Entry point — checks SharedPreferences, shows onboarding or the main app
@@ -137,24 +138,23 @@ fun OnboardingScreen(
 
     var page by remember { mutableStateOf(OnboardPage.WELCOME) }
     var syncMode by remember { mutableStateOf(SyncMode.OFFLINE) }
-    var nostrChoice by remember { mutableStateOf(NostrChoice.GENERATE) }
 
     // ── Add-child form state ──
     var childName by rememberSaveable { mutableStateOf("") }
     var childDob by rememberSaveable { mutableStateOf("") }
     var childGender by rememberSaveable { mutableStateOf("") }
 
-    // ── Nostr setup state ──
-    var nsecInput by rememberSaveable { mutableStateOf("") }
-    var nostrError by rememberSaveable { mutableStateOf<String?>(null) }
-    var nostrBusy by remember { mutableStateOf(false) }
+    // ── Key setup state ──
+    var keyBusy by remember { mutableStateOf(false) }
+    var keyError by rememberSaveable { mutableStateOf<String?>(null) }
+    var hasAmber by remember { mutableStateOf(viewModel.isAmberInstalled()) }
     val signer by nostrManager.signer.collectAsState()
-    val amberInstalled by remember { mutableStateOf(viewModel.isAmberInstalled()) }
 
-    // ── Partner setup state ──
+    // ── Partner pairing state ──
     var partnerInput by rememberSaveable { mutableStateOf("") }
     var partnerError by rememberSaveable { mutableStateOf<String?>(null) }
     var partnerBusy by remember { mutableStateOf(false) }
+    var showQrScanner by remember { mutableStateOf(false) }
     val partnerNpub by viewModel.partnerNpub.collectAsState()
 
     // ── Units state ──
@@ -163,18 +163,15 @@ fun OnboardingScreen(
     Scaffold { innerPadding ->
         Surface(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ── "Skip all" — visible on every page, top-right ──
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = {
+                // ── Progress indicator + skip ──
+                OnboardingHeader(
+                    currentPage = page,
+                    onSkip = {
                         setOnboardingComplete(context)
                         onComplete()
-                    }) {
-                        Text("Skip all", style = MaterialTheme.typography.labelMedium)
                     }
-                }
+                )
+
                 AnimatedContent(
                     targetState = page,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -202,83 +199,81 @@ fun OnboardingScreen(
                                 unitSystem = unitSystem,
                                 onSystem = { unitSystem = it },
                                 onBack = { page = OnboardPage.ADD_CHILD },
-                                onNext = { page = OnboardPage.CHOOSE_MODE },
-                                onSkip = { page = OnboardPage.CHOOSE_MODE }
+                                onNext = { page = OnboardPage.CHOOSE_SYNC },
+                                onSkip = { page = OnboardPage.CHOOSE_SYNC }
                             )
                         }
-                        OnboardPage.CHOOSE_MODE -> item {
-                            ChooseModePage(
+                        OnboardPage.CHOOSE_SYNC -> item {
+                            ChooseSyncPage(
                                 selected = syncMode,
                                 onSelect = { syncMode = it },
                                 onBack = { page = OnboardPage.UNITS },
                                 onNext = {
                                     page = when (syncMode) {
                                         SyncMode.OFFLINE -> OnboardPage.DONE
-                                        SyncMode.RELAY_SOLO,
-                                        SyncMode.PARTNER -> OnboardPage.SETUP_NOSTR
+                                        SyncMode.BACKUP,
+                                        SyncMode.PAIR -> OnboardPage.SET_UP_KEY
                                     }
                                 },
                                 onSkip = {
                                     page = when (syncMode) {
                                         SyncMode.OFFLINE -> OnboardPage.DONE
-                                        SyncMode.RELAY_SOLO,
-                                        SyncMode.PARTNER -> OnboardPage.SETUP_NOSTR
+                                        SyncMode.BACKUP,
+                                        SyncMode.PAIR -> OnboardPage.SET_UP_KEY
                                     }
                                 }
                             )
                         }
-                        OnboardPage.SETUP_NOSTR -> item {
-                            SetupNostrPage(
-                                choice = nostrChoice,
-                                onChoice = { nostrChoice = it },
-                                nsecInput = nsecInput,
-                                onNsec = { nsecInput = it; nostrError = null },
-                                error = nostrError,
-                                busy = nostrBusy,
-                                amberInstalled = amberInstalled,
+                        OnboardPage.SET_UP_KEY -> item {
+                            SetUpKeyPage(
+                                busy = keyBusy,
+                                error = keyError,
                                 signerActive = signer != null,
-                                onBack = { page = OnboardPage.CHOOSE_MODE },
+                                hasAmber = hasAmber,
+                                onBack = { page = OnboardPage.CHOOSE_SYNC },
                                 onSkip = { page = OnboardPage.DONE },
-                                onSetup = {
+                                onGenerate = {
                                     scope.launch {
-                                        nostrBusy = true
-                                        nostrError = null
-                                        val ok = when (nostrChoice) {
-                                            NostrChoice.GENERATE -> {
-                                                viewModel.generateNostrIdentity()
-                                                // generateIdentity is fire-and-forget; check signer
-                                                kotlinx.coroutines.delay(500)
-                                                signer != null || nostrManager.signer.value != null
-                                            }
-                                            NostrChoice.IMPORT -> {
-                                                val result = nostrManager.importIdentity(nsecInput.trim())
-                                                result != null
-                                            }
-                                            NostrChoice.AMBER -> {
-                                                val result = nostrManager.loginWithAmber()
-                                                result != null
-                                            }
-                                            NostrChoice.SKIP -> true
-                                        }
-                                        nostrBusy = false
+                                        keyBusy = true
+                                        keyError = null
+                                        viewModel.generateNostrIdentity()
+                                        kotlinx.coroutines.delay(500)
+                                        keyBusy = false
+                                        val ok = signer != null || nostrManager.signer.value != null
                                         if (ok) {
-                                            page = if (syncMode == SyncMode.PARTNER)
-                                                OnboardPage.SETUP_PARTNER else OnboardPage.DONE
+                                            page = if (syncMode == SyncMode.PAIR)
+                                                OnboardPage.PAIR_PARTNER else OnboardPage.DONE
                                         } else {
-                                            nostrError = "Setup failed — try again or skip for now"
+                                            keyError = "Could not create a key — try again or skip"
+                                        }
+                                    }
+                                },
+                                onAmber = {
+                                    scope.launch {
+                                        keyBusy = true
+                                        keyError = null
+                                        val result = nostrManager.loginWithAmber()
+                                        keyBusy = false
+                                        if (result != null) {
+                                            page = if (syncMode == SyncMode.PAIR)
+                                                OnboardPage.PAIR_PARTNER else OnboardPage.DONE
+                                        } else {
+                                            keyError = "Amber login failed — try again or skip"
                                         }
                                     }
                                 }
                             )
                         }
-                        OnboardPage.SETUP_PARTNER -> item {
-                            SetupPartnerPage(
+                        OnboardPage.PAIR_PARTNER -> item {
+                            PairPartnerPage(
                                 input = partnerInput,
                                 onInput = { partnerInput = it; partnerError = null },
                                 error = partnerError,
                                 busy = partnerBusy,
                                 partnerLinked = partnerNpub != null,
-                                onBack = { page = OnboardPage.SETUP_NOSTR },
+                                signer = signer,
+                                onScanQr = { showQrScanner = true },
+                                onBack = { page = OnboardPage.SET_UP_KEY },
                                 onSkip = { page = OnboardPage.DONE },
                                 onLink = {
                                     scope.launch {
@@ -286,7 +281,7 @@ fun OnboardingScreen(
                                         partnerError = null
                                         val input = partnerInput.trim()
                                         if (input.isEmpty()) {
-                                            partnerError = "Enter an npub or NIP-05"
+                                            partnerError = "Enter an npub, NIP-05, or scan their QR"
                                             partnerBusy = false
                                             return@launch
                                         }
@@ -333,6 +328,61 @@ fun OnboardingScreen(
                 }
                 }
             }
+        }
+    }
+
+    // ── QR Scanner overlay (used in pair partner page) ──
+    if (showQrScanner) {
+        com.turkbot.babytracker.ui.components.QrScanner(
+            onScanned = { result ->
+                showQrScanner = false
+                partnerInput = result
+                // Auto-attempt link after scan
+                scope.launch {
+                    partnerBusy = true
+                    partnerError = null
+                    val success = viewModel.setPartnerIdentifier(result.trim())
+                    partnerBusy = false
+                    if (success) {
+                        page = OnboardPage.DONE
+                    } else {
+                        partnerError = "Could not resolve scanned QR — check with partner"
+                    }
+                }
+            },
+            onDismiss = { showQrScanner = false }
+        )
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Progress header — shows step dots + skip button
+// ──────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun OnboardingHeader(currentPage: OnboardPage, onSkip: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Step progress dots
+        val pages = OnboardPage.entries
+        val currentIndex = pages.indexOf(currentPage)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            pages.forEachIndexed { index, _ ->
+                val isActive = index <= currentIndex
+                Surface(
+                    shape = CircleShape,
+                    color = if (isActive)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier = Modifier.size(8.dp)
+                ) {}
+            }
+        }
+        TextButton(onClick = onSkip) {
+            Text("Skip all", style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -387,7 +437,7 @@ private fun WelcomePage(onStart: () -> Unit) {
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                PrivacyRow(Icons.Filled.Key, "Your data stays on your phone")
+                PrivacyRow(Icons.Filled.Lock, "Your data stays on your phone")
                 PrivacyRow(Icons.Filled.CloudOff, "No accounts, no tracking, no cloud")
                 PrivacyRow(Icons.Filled.Done, "Works offline — sync is optional")
             }
@@ -524,11 +574,11 @@ private fun UnitsPage(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Page 4 — Choose Sync Mode
+// Page 4 — Choose Sync Mode (simplified language)
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ChooseModePage(
+private fun ChooseSyncPage(
     selected: SyncMode,
     onSelect: (SyncMode) -> Unit,
     onBack: () -> Unit,
@@ -536,7 +586,7 @@ private fun ChooseModePage(
     onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("How Do You Want To Sync?", "You can change this later in Settings.")
+        PageHeader("Sync Settings", "You can change this later in Settings.")
         Spacer(Modifier.height(16.dp))
 
         SyncMode.entries.forEach { mode ->
@@ -611,25 +661,22 @@ private fun ModeCard(mode: SyncMode, selected: Boolean, onClick: () -> Unit) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Page 5 — Set up Nostr identity (only for relay/partner modes)
+// Page 5 — Set Up Key (frictionless: one-tap generate, jargon-free)
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SetupNostrPage(
-    choice: NostrChoice,
-    onChoice: (NostrChoice) -> Unit,
-    nsecInput: String,
-    onNsec: (String) -> Unit,
-    error: String?,
+private fun SetUpKeyPage(
     busy: Boolean,
-    amberInstalled: Boolean,
+    error: String?,
     signerActive: Boolean,
+    hasAmber: Boolean,
     onBack: () -> Unit,
     onSkip: () -> Unit,
-    onSetup: () -> Unit
+    onGenerate: () -> Unit,
+    onAmber: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Create Your Nostr Identity", "This encrypts and identifies your backups on Nostr relays.")
+        PageHeader("Create Your Backup Key", "This encrypts your data so only you can access it.")
         Spacer(Modifier.height(16.dp))
 
         if (signerActive) {
@@ -646,7 +693,7 @@ private fun SetupNostrPage(
                 ) {
                     Icon(Icons.Filled.Done, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Identity is set up and ready.",
+                    Text("Your key is ready.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Medium)
@@ -655,60 +702,72 @@ private fun SetupNostrPage(
             Spacer(Modifier.height(24.dp))
             NavButtons(
                 onBack = onBack,
-                onNext = onSkip,  // proceed to next page
+                onNext = onSkip,
                 nextEnabled = true,
                 nextLabel = "Continue"
             )
             return@Column
         }
 
-        NostrOptionCard(
-            title = "Generate New Key",
-            desc = "Creates a fresh Nostr key. Simplest option.",
-            icon = Icons.Filled.Key,
-            selected = choice == NostrChoice.GENERATE,
-            onClick = { onChoice(NostrChoice.GENERATE) }
-        )
-        Spacer(Modifier.height(8.dp))
-
-        NostrOptionCard(
-            title = "Import nsec",
-            desc = "Paste an existing Nostr private key (nsec1...).",
-            icon = Icons.Filled.Key,
-            selected = choice == NostrChoice.IMPORT,
-            onClick = { onChoice(NostrChoice.IMPORT) }
-        )
-        if (choice == NostrChoice.IMPORT) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = nsecInput,
-                onValueChange = onNsec,
-                label = { Text("nsec1...") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+        // Primary: one-tap generate
+        Card(
+            onClick = { if (!busy) onGenerate() },
+            modifier = Modifier.fillMaxWidth().border(
+                2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
             )
+        ) {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Key,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Create a New Key",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "One tap. We'll generate a secure key for you automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                if (busy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp), strokeWidth = 2.dp
+                    )
+                }
+            }
         }
 
-        Spacer(Modifier.height(8.dp))
-        NostrOptionCard(
-            title = if (amberInstalled) "Log in with Amber" else "Log in with Amber (install)",
-            desc = "Your private key stays in the Amber app. Infans never sees it.",
-            icon = Icons.Filled.AccountCircle,
-            selected = choice == NostrChoice.AMBER,
-            onClick = { onChoice(NostrChoice.AMBER) }
-        )
-        if (choice == NostrChoice.AMBER && amberInstalled) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Tip: When Amber asks, select \"Manual\" sign policy (not Basic) so Infans only gets the 3 permissions it needs.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Spacer(Modifier.height(12.dp))
+
+        // Alternative: Amber (external signer)
+        OutlinedButton(
+            onClick = onAmber,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.AccountCircle, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (hasAmber) "Use Amber App Instead" else "Use Amber (Install Required)")
         }
-        if (choice == NostrChoice.AMBER && !amberInstalled) {
+        if (!hasAmber) {
             Spacer(Modifier.height(4.dp))
             Text(
-                "Install Amber from zapstore.dev/apps/com.greenart7c3.amber",
+                "Amber keeps your key in a separate app. Install from zapstore.dev/apps/com.greenart7c3.amber",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -729,82 +788,27 @@ private fun SetupNostrPage(
                 Text("Back")
             }
             TextButton(onClick = onSkip) { Text("Skip for now") }
-            Button(
-                onClick = onSetup,
-                enabled = !busy && choice != NostrChoice.SKIP,
-                modifier = Modifier.weight(1f)
-            ) {
-                if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp), strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Set Up")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NostrOptionCard(
-    title: String, desc: String, icon: ImageVector,
-    selected: Boolean, onClick: () -> Unit
-) {
-    val border = if (selected)
-        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.medium)
-    else Modifier
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().then(border),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected)
-                MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                icon, contentDescription = null, modifier = Modifier.size(24.dp),
-                tint = if (selected)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column {
-                Text(title, style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = if (selected)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface)
-                Text(desc, style = MaterialTheme.typography.bodySmall,
-                    color = if (selected)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
     }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Page 6 — Link Partner (only for partner mode)
+// Page 6 — Pair Partner (QR-first, also supports npub/NIP-05 paste)
 // ──────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SetupPartnerPage(
+private fun PairPartnerPage(
     input: String, onInput: (String) -> Unit,
     error: String?, busy: Boolean,
     partnerLinked: Boolean,
+    signer: com.turkbot.babytracker.nostr.crypto.NostrSigner?,
+    onScanQr: () -> Unit,
     onBack: () -> Unit,
     onSkip: () -> Unit,
     onLink: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Link With The Other Parent", "Enter their npub or NIP-05 so data syncs between your phones.")
+        PageHeader("Link With The Other Parent", "Scan their QR code, or enter their npub or NIP-05.")
         Spacer(Modifier.height(16.dp))
 
         if (partnerLinked) {
@@ -837,19 +841,62 @@ private fun SetupPartnerPage(
             return@Column
         }
 
+        // ── Show your QR for the other parent to scan ──
+        if (signer != null) {
+            val identity = signer.let { s ->
+                // Use npub as the QR content — NIP-05 isn't always set during onboarding
+                s.npub
+            }
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Your QR Code",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    com.turkbot.babytracker.ui.components.QrCodeDisplay(
+                        content = identity,
+                        caption = "Have the other parent scan this in their Infans app."
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // ── Scan their QR ──
+        Button(
+            onClick = onScanQr,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Scan Partner's QR")
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Or enter manually:",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
         OutlinedTextField(
             value = input,
             onValueChange = onInput,
-            label = { Text("Partner's npub or NIP-05") },
+            label = { Text("npub or NIP-05") },
             placeholder = { Text("npub1... or name@domain.com") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Ask the other parent for their npub or NIP-05. They can find it in Infans under Settings → Nostr Identity.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (error != null) {
             Spacer(Modifier.height(8.dp))
@@ -876,7 +923,7 @@ private fun SetupPartnerPage(
                         modifier = Modifier.size(16.dp), strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Link Partner")
+                    Text("Link")
                 }
             }
         }
@@ -931,7 +978,7 @@ private fun DonePage(
                     fontWeight = FontWeight.Medium)
                 HorizontalDivider()
                 TipRow(Icons.Filled.Restaurant, "Use the Feed tab to log bottle, breast, or solid feedings.")
-                TipRow(Icons.Filled.BabyChangingStation, "Diaper, pumping, and health are on the Home screen.")
+                TipRow(Icons.Filled.BabyChangingStation, "Diaper, pumping, health, and vaccines are on the Home screen.")
                 TipRow(Icons.Filled.People, if (partnerLinked)
                     "Notes you leave will appear on the other parent's phone."
                 else
@@ -941,7 +988,7 @@ private fun DonePage(
                 else if (signerActive)
                     "Data syncs automatically after each entry."
                 else
-                    "Set up your Nostr identity in Settings to start syncing.")
+                    "Set up your backup key in Settings to start syncing.")
             }
         }
 
