@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -229,6 +230,7 @@ fun OnboardingScreen(
                                 busy = keyBusy,
                                 error = keyError,
                                 signerActive = signer != null,
+                                isLocalKey = signer?.type == com.turkbot.babytracker.nostr.crypto.SignerType.LOCAL,
                                 hasAmber = hasAmber,
                                 onBack = { page = OnboardPage.CHOOSE_SYNC },
                                 onSkip = { page = OnboardPage.DONE },
@@ -669,6 +671,7 @@ private fun SetUpKeyPage(
     busy: Boolean,
     error: String?,
     signerActive: Boolean,
+    isLocalKey: Boolean,
     hasAmber: Boolean,
     onBack: () -> Unit,
     onSkip: () -> Unit,
@@ -699,6 +702,49 @@ private fun SetUpKeyPage(
                         fontWeight = FontWeight.Medium)
                 }
             }
+
+            // ── Key safety warning for locally-generated keys ──
+            if (isLocalKey) {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                "Keep Your Key Safe",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        Text(
+                            "This key is the only way to access your data. If you lose it, " +
+                                "your backup is gone forever — there is no password reset. " +
+                                "Write it down somewhere safe, or back up your phone regularly.\n\n" +
+                                "You can view and copy your key later in Settings → Nostr Identity.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
             NavButtons(
                 onBack = onBack,
