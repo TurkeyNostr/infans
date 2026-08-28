@@ -51,6 +51,7 @@ private val BREAST_SIDES = listOf("left", "right", "both")
 fun FeedScreen(viewModel: BabyViewModel) {
     val feedings by viewModel.feedings.collectAsState()
     val remoteBreastSession by viewModel.remoteBreastSession.collectAsState()
+    val forceStopBreast by viewModel.forceStopBreast.collectAsState()
 
     var selectedType by remember { mutableStateOf("bottle") }
     var amountText by remember { mutableStateOf("") }
@@ -169,6 +170,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 label = "Breast",
                                 alarmPresets = listOf(5, 10, 15, 20),
                                 remoteSession = remoteBreastSession,
+                                forceStopTick = forceStopBreast,
                                 onStop = { minutes ->
                                     val saved = viewModel.addFeeding(
                                         type = "breast",

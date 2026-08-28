@@ -42,6 +42,7 @@ import java.util.Locale
 fun SleepScreen(viewModel: BabyViewModel) {
     val sleeps by viewModel.sleeps.collectAsState()
     val remoteSleepSession by viewModel.remoteSleepSession.collectAsState()
+    val forceStopSleep by viewModel.forceStopSleep.collectAsState()
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     var startText by remember {
@@ -96,6 +97,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                         label = "Sleep",
                         alarmPresets = listOf(30, 45, 60, 90),
                         remoteSession = remoteSleepSession,
+                        forceStopTick = forceStopSleep,
                         onStop = { minutes ->
                             viewModel.addSleep(
                                 start = System.currentTimeMillis() - minutes * 60_000L,

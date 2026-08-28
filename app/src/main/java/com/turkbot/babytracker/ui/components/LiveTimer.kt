@@ -84,6 +84,7 @@ fun LiveTimer(
     label: String,
     alarmPresets: List<Int> = emptyList(),
     remoteSession: ActiveSession? = null,
+    forceStopTick: Int = 0,
     onStop: (durationMinutes: Int) -> Unit,
     onStart: (startTime: Long, alarmMinutes: Int) -> Unit = { _, _ -> },
     onRemoteStop: (durationMinutes: Int) -> Unit = {}
@@ -127,6 +128,27 @@ fun LiveTimer(
     LaunchedEffect(remoteSession) {
         if (remoteSession == null && !localRunning) {
             elapsed = 0L
+        }
+    }
+
+    // ── Force-stop from partner ──
+    // When the partner stops a session WE started locally, NostrManager
+    // receives the session_ended event and increments forceStopTick.  We
+    // clear the local timer state WITHOUT calling onStop (no record created
+    // — the partner already logged one via onRemoteTimerStopped on their end).
+    LaunchedEffect(forceStopTick) {
+        if (forceStopTick > 0 && localRunning) {
+            localRunning = false
+            elapsed = 0L
+            startTime = 0L
+            prefs.edit()
+                .remove(keyStart)
+                .remove(keyAlarm)
+                .apply()
+            if (alarmMinutes > 0) {
+                ReminderScheduler.cancelTimerAlarm(context)
+                alarmMinutes = 0
+            }
         }
     }
 

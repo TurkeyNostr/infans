@@ -412,10 +412,28 @@ private fun aggregateActivity(
     for (i in 0 until n) {
         val (start, end) = buckets[i]
         val count: Double = when (metric) {
-            Metric.FEEDINGS -> feedings.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
+            Metric.FEEDINGS -> {
+                // Deduplicate breast-feeding records: both parents can
+                // independently log the same session (before the force-stop
+                // fix).  Bottle/solids entries are always single-parent so
+                // they can't collide, but breast sessions share the same
+                // (duration, time bucket) pattern as sleep.  Group the full
+                // feeding list and count one per group.
+                feedings.filter { it.time in start.timeInMillis until end.timeInMillis }
+                    .groupBy { Triple(it.type, it.time / 600_000L, it.childId) }
+                    .size
+                    .toDouble()
+            }
             Metric.SLEEP -> {
+                // Deduplicate sleep records: both parents can independently
+                // log the same session (before the force-stop fix), creating
+                // two records with different UUIDs but the same duration and
+                // nearly identical start times.  Group by (duration, start
+                // rounded to 10-min bucket) and keep one per group.
                 sleeps.filter { it.start in start.timeInMillis until end.timeInMillis }
-                    .sumOf { it.duration / 60.0 }  // minutes → hours
+                    .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+                    .values
+                    .sumOf { group -> group.first().duration / 60.0 }  // minutes → hours
             }
             Metric.DIAPERS -> diapers.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()
             Metric.BATHS -> baths.count { it.time in start.timeInMillis until end.timeInMillis }.toDouble()

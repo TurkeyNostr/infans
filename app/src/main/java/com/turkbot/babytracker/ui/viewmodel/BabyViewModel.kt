@@ -94,6 +94,10 @@ class BabyViewModel(
     val remoteSleepSession = nostr.remoteSleepSession
     val remoteBreastSession = nostr.remoteBreastSession
 
+    // Force-stop signals: when partner stops a session we started locally
+    val forceStopSleep = nostr.forceStopSleep
+    val forceStopBreast = nostr.forceStopBreast
+
     // ── Child management ──────────────────────────────
     fun selectChild(id: String) { _activeChildId.value = id }
 

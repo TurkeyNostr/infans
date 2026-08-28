@@ -137,15 +137,25 @@ fun SummaryScreen(
     }
 
     val feedCounts = days.map { day ->
-        feedings.count { f ->
+        // Deduplicate breast-feeding records: both parents can log the same
+        // session.  Group by (type, time bucket, childId) and count groups.
+        feedings.filter { f ->
             SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(f.time)) == day
         }
+        .groupBy { Triple(it.type, it.time / 600_000L, it.childId) }
+        .size
     }
     val sleepHours = days.map { day ->
         val daySleeps = sleeps.filter { s ->
             SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(s.start)) == day
         }
-        daySleeps.sumOf { it.duration } / 60.0
+        // Deduplicate: both parents can log the same session with different
+        // UUIDs.  Group by (duration, start rounded to 10-min bucket, childId)
+        // and keep one per group to prevent double-counting.
+        daySleeps
+            .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+            .values
+            .sumOf { group -> group.first().duration } / 60.0
     }
 
     LazyColumn(
@@ -277,7 +287,10 @@ fun SummaryScreen(
                     val totalBreastMin = todayFeedings
                         .filter { it.type == "breast" }
                         .sumOf { it.duration ?: 0 }
-                    val totalSleepMin = todaySleeps.sumOf { it.duration }
+                    val totalSleepMin = todaySleeps
+                        .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+                        .values
+                        .sumOf { group -> group.first().duration }
                     val totalDiapers = todayDiapers.size
 
                     TotalsRow(
@@ -376,7 +389,12 @@ fun SummaryScreen(
                 StatCard(
                     icon = Icons.Default.Bedtime,
                     label = "Sleep Today",
-                    value = Units.fmtDuration(todaySleeps.sumOf { it.duration }),
+                    value = Units.fmtDuration(
+                        todaySleeps
+                            .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+                            .values
+                            .sumOf { group -> group.first().duration }
+                    ),
                     modifier = Modifier.weight(1f),
                     iconTint = MaterialTheme.colorScheme.tertiary
                 )

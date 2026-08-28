@@ -174,6 +174,25 @@ class NostrManager(context: Context) {
     @Volatile
     private var localBreastSessionId: String? = null
 
+    // ── Force-stop signals for local timers ──────────────
+    //
+    // When the partner stops a session that WE started locally, we receive
+    // the session_ended event.  Our local timer (LiveTimer) is still running
+    // because the end event only clears _remoteSleepSession — which was null
+    // on our side (we're the starter, not the receiver).  Without a force-stop
+    // signal, the starter's local timer keeps running, they manually stop it,
+    // and a duplicate Sleep/Feeding record is created → the 59-hours-in-24h
+    // chart bug.
+    //
+    // These flows emit a tick (incrementing counter) whenever the partner ends
+    // a session we started.  The LiveTimer observes the flow and clears its
+    // local state WITHOUT creating a record (the partner already logged one).
+    private val _forceStopSleep = MutableStateFlow(0)
+    val forceStopSleep: StateFlow<Int> = _forceStopSleep
+
+    private val _forceStopBreast = MutableStateFlow(0)
+    val forceStopBreast: StateFlow<Int> = _forceStopBreast
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /** Event IDs currently being decrypted — prevents the same event from
@@ -1015,8 +1034,24 @@ class NostrManager(context: Context) {
         // Check if this is a session_ended event (empty content)
         val isEnded = event.tags.any { it.isNotEmpty() && it[0] == "session_ended" && it.getOrNull(1) == "true" }
         if (isEnded || event.content.isBlank()) {
-            if (isSleep) _remoteSleepSession.value = null
-            else _remoteBreastSession.value = null
+            if (isSleep) {
+                _remoteSleepSession.value = null
+                // If we started this session locally, the partner just stopped
+                // it.  Signal the local LiveTimer to stop WITHOUT creating a
+                // record (the partner already logged one in onRemoteTimerStopped).
+                if (localSleepSessionId != null) {
+                    localSleepSessionId = null
+                    _forceStopSleep.value = _forceStopSleep.value + 1
+                    Dbg.info(Cat.SYNC, "Partner stopped our Sleep session — force-stopping local timer")
+                }
+            } else {
+                _remoteBreastSession.value = null
+                if (localBreastSessionId != null) {
+                    localBreastSessionId = null
+                    _forceStopBreast.value = _forceStopBreast.value + 1
+                    Dbg.info(Cat.SYNC, "Partner stopped our Breast session — force-stopping local timer")
+                }
+            }
             Dbg.info(Cat.SYNC, "Remote session ended: ${if (isSleep) "Sleep" else "Breast"}")
             return
         }
