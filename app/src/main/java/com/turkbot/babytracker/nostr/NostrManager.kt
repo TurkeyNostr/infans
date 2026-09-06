@@ -1009,6 +1009,25 @@ class NostrManager(context: Context) {
     // ── Active session handling ───────────────────────────
 
     /**
+     * Clear the persisted LiveTimer state (SharedPreferences) and cancel any
+     * pending alarm for the given label. Called when the partner force-stops
+     * a locally-started session — the timer screen may not be composed at
+     * that moment, so the prefs must be cleared here or the timer resurrects.
+     */
+    private fun clearTimerPrefs(label: String) {
+        try {
+            val prefs = appContext.getSharedPreferences("live_timer_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("start_$label")
+                .remove("alarm_$label")
+                .apply()
+            com.turkbot.babytracker.reminder.ReminderScheduler.cancelTimerAlarm(appContext)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear timer prefs for $label", e)
+        }
+    }
+
+    /**
      * Handle an incoming session event from the partner.
      *
      * If the content is empty (session_ended tag), clear the remote session.
@@ -1042,6 +1061,11 @@ class NostrManager(context: Context) {
                 if (localSleepSessionId != null) {
                     localSleepSessionId = null
                     _forceStopSleep.value = _forceStopSleep.value + 1
+                    // Also clear the persisted timer state directly — the Sleep
+                    // screen may not be composed (user on another tab), in which
+                    // case the forceStopTick effect never runs and the timer
+                    // would resurrect from prefs on the next tab visit.
+                    clearTimerPrefs("Sleep")
                     Dbg.info(Cat.SYNC, "Partner stopped our Sleep session — force-stopping local timer")
                 }
             } else {
@@ -1049,6 +1073,7 @@ class NostrManager(context: Context) {
                 if (localBreastSessionId != null) {
                     localBreastSessionId = null
                     _forceStopBreast.value = _forceStopBreast.value + 1
+                    clearTimerPrefs("Breast")
                     Dbg.info(Cat.SYNC, "Partner stopped our Breast session — force-stopping local timer")
                 }
             }

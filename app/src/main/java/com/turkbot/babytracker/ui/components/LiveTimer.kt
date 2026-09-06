@@ -136,8 +136,16 @@ fun LiveTimer(
     // receives the session_ended event and increments forceStopTick.  We
     // clear the local timer state WITHOUT calling onStop (no record created
     // — the partner already logged one via onRemoteTimerStopped on their end).
+    //
+    // The effect body skips the FIRST value it sees: LaunchedEffect runs on
+    // initial composition too, so on a fresh tab visit it would see a stale
+    // counter (≥1 from any earlier partner stop) and wrongly kill a running
+    // local timer. Only a value CHANGED while we are composed means "stop now".
+    var lastSeenTick by remember { mutableStateOf(forceStopTick) }
     LaunchedEffect(forceStopTick) {
-        if (forceStopTick > 0 && localRunning) {
+        if (forceStopTick == lastSeenTick) return@LaunchedEffect
+        lastSeenTick = forceStopTick
+        if (localRunning) {
             localRunning = false
             elapsed = 0L
             startTime = 0L
