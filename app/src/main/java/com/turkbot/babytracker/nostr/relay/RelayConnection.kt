@@ -110,6 +110,15 @@ class RelayConnection(
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d("Relay", "Disconnected from $url: $reason")
                 _state.value = RelayState.DISCONNECTED
+                // Server-initiated close (e.g. relay maintenance/restart). Reconnect
+                // after a delay unless we closed the connection intentionally —
+                // without this, a graceful relay-side disconnect would leave the
+                // relay permanently offline until an unrelated failure fired.
+                if (closed) return
+                scope.launch {
+                    delay(5000)
+                    if (!closed) connect()
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
