@@ -18,14 +18,14 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.turkbot.babytracker"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.turkbot.babytracker"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 54
-        versionName = "2.4.1"
+        targetSdk = 35
+        versionCode = 55
+        versionName = "2.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -124,13 +124,12 @@ dependencies {
     // WorkManager for feeding reminders
     implementation(libs.work.runtime.ktx)
 
-    // QR code generation (ZXing) + camera scanning (CameraX + ML Kit)
+    // QR code generation + scanning (ZXing core, no Google services)
     implementation(libs.zxing.core)
     implementation(libs.camera.core)
     implementation(libs.camera.camera2)
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
-    implementation(libs.mlkit.scanning)
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")

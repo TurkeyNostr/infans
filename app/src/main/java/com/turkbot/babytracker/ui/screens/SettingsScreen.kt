@@ -1010,6 +1010,62 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             }
         }
 
+        // ─── Privacy ─────────────────────────────────────
+        item {
+            var screenshotProtection by remember { mutableStateOf(true) }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            LaunchedEffect(Unit) {
+                screenshotProtection =
+                    com.turkbot.babytracker.UiPrefs.screenshotProtectionEnabled(context)
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Screenshot Protection",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Block screenshots, screen recording, and the recents-screen preview.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = screenshotProtection,
+                        onCheckedChange = {
+                            screenshotProtection = it
+                            com.turkbot.babytracker.UiPrefs.setScreenshotProtection(context, it)
+                            // Apply immediately to the current window, not just the next launch.
+                            (context as? android.app.Activity)?.window?.let { w ->
+                                if (it) {
+                                    w.setFlags(
+                                        android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                                        android.view.WindowManager.LayoutParams.FLAG_SECURE
+                                    )
+                                } else {
+                                    w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                }
+                            }
+                            if (it) HapticController.click(context)
+                        }
+                    )
+                }
+            }
+        }
+
         // ─── Reminders ───────────────────────────────────
         item {
             SectionHeader("Reminders")

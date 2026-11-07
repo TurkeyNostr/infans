@@ -16,3 +16,6 @@ local.properties
 *.pfx
 keystore.properties
 app/build/
+release_payload.json
+release_response.json
+upload_response.json

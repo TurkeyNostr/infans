@@ -13,11 +13,23 @@
 package com.turkbot.babytracker.nostr.crypto
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import android.content.SharedPreferences
 
 /**
- * Stores Nostr identity credentials in EncryptedSharedPreferences (Android Keystore-backed).
+ * Stores Nostr identity credentials.
+ *
+ * Storage layout (replaces EncryptedSharedPreferences, deprecated by Google):
+ *   - Non-secret values (mode, npub, relays, cursors) live in a plain
+ *     SharedPreferences file — they were never secrets to begin with.
+ *   - The nsec (LOCAL mode private key) is the only secret: it is encrypted
+ *     with [KeystoreCrypto] (hardware-backed AndroidKeyStore AES-GCM) and
+ *     stored as a ciphertext blob.
+ *
+ * Migration: on first launch after upgrading, values are copied out of the
+ * legacy EncryptedSharedPreferences ("nostr_keys") — the nsec is re-encrypted
+ * into the new store, then the legacy file is deleted. The legacy read is the
+ * ONLY remaining use of androidx.security.crypto in the app; once devices
+ * have upgraded, the library and this migration path can be removed together.
  *
  * Two modes:
  *   - LOCAL: stores the nsec (private key) — keys never leave secure storage in plaintext
@@ -27,13 +39,54 @@ import androidx.security.crypto.MasterKey
  */
 class SecureKeyStore(context: Context) {
 
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "nostr_keys",
-        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs: SharedPreferences
+
+    init {
+        prefs = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+        migrateLegacyIfNeeded(context)
+    }
+
+    /**
+     * One-time upgrade from the deprecated EncryptedSharedPreferences store.
+     * Idempotent: guarded by a flag in the new store. If the legacy store is
+     * unreadable (lost Keystore master key / corrupted), the flag is still set
+     * and the user simply re-runs onboarding — we never crash the app over it.
+     */
+    private fun migrateLegacyIfNeeded(context: Context) {
+        if (prefs.getBoolean(KEY_MIGRATED, false)) return
+
+        try {
+            val legacy = androidx.security.crypto.EncryptedSharedPreferences.create(
+                context,
+                LEGACY_PREF_FILE,
+                androidx.security.crypto.MasterKey.Builder(context)
+                    .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                    .build(),
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+
+            // Secrets get re-encrypted with the new Keystore path; everything
+            // else is copied as-is (it was never secret).
+            legacy.getString(KEY_NSEC, null)?.let { nsec ->
+                prefs.edit().putString(KEY_NSEC, KeystoreCrypto.encrypt(nsec)).apply()
+            }
+            for (key in PLAINTEXT_KEYS) {
+                val all = legacy.all
+                when (val value = all[key]) {
+                    is String -> prefs.edit().putString(key, value).apply()
+                    is Long -> prefs.edit().putLong(key, value).apply()
+                    is Int -> prefs.edit().putInt(key, value).apply()
+                }
+            }
+
+            context.deleteSharedPreferences(LEGACY_PREF_FILE)
+        } catch (_: Exception) {
+            // Legacy store unreadable — fall through and mark migrated so we
+            // never retry (and never crash) on every launch.
+        }
+        prefs.edit().putBoolean(KEY_MIGRATED, true).apply()
+    }
 
     // ── Mode ───────────────────────────────────────────
 
@@ -54,15 +107,16 @@ class SecureKeyStore(context: Context) {
 
     fun saveKeyPair(keys: NostrKeyPair) {
         prefs.edit()
-            .putString(KEY_NSEC, keys.nsec)
+            .putString(KEY_NSEC, KeystoreCrypto.encrypt(keys.nsec))
             .putString(KEY_NPUB, keys.npub)
             .putString(KEY_MODE, "local")
             .apply()
     }
 
     fun getKeyPair(): NostrKeyPair? {
-        val nsec = prefs.getString(KEY_NSEC, null) ?: return null
+        val blob = prefs.getString(KEY_NSEC, null) ?: return null
         return try {
+            val nsec = KeystoreCrypto.decryptToString(blob)
             val priv = NostrKeys.decodeNsec(nsec)
             NostrKeys.fromPrivateKey(priv)
         } catch (e: Exception) {
@@ -188,13 +242,7 @@ class SecureKeyStore(context: Context) {
      * Null clears it. Cleared automatically when partner npub is cleared.
      */
     fun savePartnerNip05(nip05: String?) {
-        val edit = prefs.edit()
-        if (nip05.isNullOrBlank()) {
-            edit.remove(KEY_PARTNER_NIP05)
-        } else {
-            edit.putString(KEY_PARTNER_NIP05, nip05)
-        }
-        edit.apply()
+        prefs.edit().putString(KEY_PARTNER_NIP05, nip05).apply()
     }
 
     fun getPartnerNip05(): String? = prefs.getString(KEY_PARTNER_NIP05, null)
@@ -208,7 +256,11 @@ class SecureKeyStore(context: Context) {
     fun getReminderInterval(): Int = prefs.getInt(KEY_REMINDER_INTERVAL, 0)
 
     companion object {
-        private const val KEY_NSEC = "nsec"
+        private const val PREF_FILE = "nostr_prefs"
+        private const val LEGACY_PREF_FILE = "nostr_keys"
+        private const val KEY_MIGRATED = "migrated_from_legacy_keystore"
+
+        private const val KEY_NSEC = "nsec" // stored as KeystoreCrypto ciphertext blob
         private const val KEY_NPUB = "npub"
         private const val KEY_MODE = "signer_mode"
         private const val KEY_SIGNER_PKG = "signer_package"
@@ -219,6 +271,13 @@ class SecureKeyStore(context: Context) {
         private const val KEY_PARTNER_NPUB = "partner_npub"
         private const val KEY_PARTNER_NIP05 = "partner_nip05"
         private const val KEY_REMINDER_INTERVAL = "reminder_interval_min"
+
+        /** Legacy keys migrated verbatim (non-secret). */
+        private val PLAINTEXT_KEYS = listOf(
+            KEY_NPUB, KEY_MODE, KEY_SIGNER_PKG, KEY_RELAYS, KEY_PROCESSED_EVENTS,
+            KEY_LAST_BACKUP_TIME, KEY_LAST_PARTNER_SYNC_TIME, KEY_PARTNER_NPUB,
+            KEY_PARTNER_NIP05, KEY_REMINDER_INTERVAL
+        )
     }
 }
 

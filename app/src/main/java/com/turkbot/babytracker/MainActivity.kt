@@ -14,6 +14,7 @@ package com.turkbot.babytracker
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +44,13 @@ class MainActivity : ComponentActivity() {
         }
 
         enableEdgeToEdge()
+
+        // Screenshot protection (default ON): blocks screenshots, screen
+        // recording, and the recents-screen preview. Toggle lives in Settings.
+        if (UiPrefs.screenshotProtectionEnabled(this)) {
+            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        }
+
         setContent {
             BabyTrackerTheme {
                 // Bind the AmberBridge so AmberSigner can launch intents via the Activity.

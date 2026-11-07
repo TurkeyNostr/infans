@@ -25,7 +25,6 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -49,10 +48,12 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.DecodeHintType
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.PlanarYUVLuminanceSource
+import com.google.zxing.common.HybridBinarizer
 import java.util.concurrent.Executors
 
 /**
@@ -60,9 +61,11 @@ import java.util.concurrent.Executors
  * preview, and calls [onScanned] with the first decoded text result.
  * Caller is responsible for dismissing the composable after callback.
  *
+ * Decoding is pure ZXing-core on the CameraX luminance plane: no ML Kit,
+ * no Google Play services, no bundled ML model.
+ *
  * @param onScanned callback with decoded QR text
  * @param onDismiss callback when user taps the close button
- * @param supportedFormats restrict to QR codes by default
  */
 @Composable
 fun QrScanner(
@@ -71,7 +74,6 @@ fun QrScanner(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -133,21 +135,14 @@ private fun CameraPreview(
     val lifecycleOwner = LocalLifecycleOwner.current
     var scanned by remember { mutableStateOf(false) }
 
-    // Scanner configured for QR codes only
-    val scanner = remember {
-        BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build()
-        )
-    }
-
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    // One reader per thread is required: MultiFormatReader keeps mutable state.
+    val reader = remember { MultiFormatReader() }
+    val hints = mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE))
 
     DisposableEffect(Unit) {
         onDispose {
             cameraExecutor.shutdown()
-            scanner.close()
         }
     }
 
@@ -169,11 +164,11 @@ private fun CameraPreview(
                     .also { analysis ->
                         analysis.setAnalyzer(cameraExecutor) { imageProxy ->
                             if (!scanned) {
-                                processImage(imageProxy, scanner) { result ->
-                                    if (result != null && !scanned) {
-                                        scanned = true
-                                        onScanned(result)
-                                    }
+                                val result = decodeQr(imageProxy, reader, hints)
+                                imageProxy.close()
+                                if (result != null && !scanned) {
+                                    scanned = true
+                                    onScanned(result)
                                 }
                             } else {
                                 imageProxy.close()
@@ -200,23 +195,59 @@ private fun CameraPreview(
     )
 }
 
-private fun processImage(
+/**
+ * Decodes a QR code from a CameraX YUV frame with ZXing, synchronously on
+ * the analyzer thread. Returns null when nothing is found. The caller owns
+ * [imageProxy] and closes it.
+ */
+private fun decodeQr(
     imageProxy: ImageProxy,
-    scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
-    onResult: (String?) -> Unit
-) {
-    val mediaImage = imageProxy.image
-    if (mediaImage != null) {
-        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-        scanner.process(image)
-            .addOnSuccessListener { barcodes ->
-                val raw = barcodes.firstOrNull()?.rawValue
-                onResult(raw)
-            }
-            .addOnCompleteListener {
-                imageProxy.close()
-            }
-    } else {
-        imageProxy.close()
+    reader: MultiFormatReader,
+    hints: Map<DecodeHintType, Any>
+): String? {
+    val plane = imageProxy.planes.firstOrNull() ?: return null
+    val rotation = imageProxy.imageInfo.rotationDegrees
+
+    // Pack the Y plane (rowStride may exceed width) into a dense buffer.
+    val width = plane.rowStride
+    val height = imageProxy.height
+    val buffer = plane.buffer
+    buffer.rewind()
+    val packed = ByteArray(width * height)
+    for (row in 0 until height) {
+        buffer.position(row * plane.rowStride)
+        buffer.get(packed, row * width, width)
     }
+
+    // Rotate the luminance data so it matches the displayed orientation.
+    // rotateLuminance transposes, so after a 90/270 turn the dimensions swap.
+    val turns = (rotation / 90) % 4
+    var data = packed
+    var srcW = width
+    var srcH = height
+    repeat(turns) {
+        data = rotateLuminance(data, srcW, srcH)
+        val t = srcW; srcW = srcH; srcH = t
+    }
+
+    val source = PlanarYUVLuminanceSource(data, srcW, srcH, 0, 0, srcW, srcH, false)
+    val bitmap = BinaryBitmap(HybridBinarizer(source))
+    return try {
+        reader.decode(bitmap, hints)?.text
+    } catch (e: Exception) {
+        null
+    } finally {
+        reader.reset()
+    }
+}
+
+/** Rotates a packed luminance matrix 90 degrees clockwise. */
+private fun rotateLuminance(src: ByteArray, width: Int, height: Int): ByteArray {
+    val out = ByteArray(src.size)
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            out[x * height + (height - 1 - y)] = src[y * width + x]
+        }
+    }
+    return out
 }
