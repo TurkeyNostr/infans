@@ -441,6 +441,8 @@
     <string name="summary_today">today</string>
     <string name="summary_sheet_diaper">Diaper change</string>
     <string name="summary_sheet_save">Log for %1$s · now</string>
+    <string name="summary_insight_sleep_down">💡 Sleep is down %1$s vs last week — still in the normal range.</string>
+    <string name="summary_insight_sleep_up">💡 Sleep is up %1$s vs last week.</string>
     <string name="summary_last_diaper">Last Diaper</string>
     <string name="summary_last_feeding">Last Feeding</string>
     <string name="summary_last_sleep">Last Sleep</string>

@@ -441,6 +441,8 @@
     <string name="summary_today">hoy</string>
     <string name="summary_sheet_diaper">Cambio de pañal</string>
     <string name="summary_sheet_save">Registrar para %1$s · ahora</string>
+    <string name="summary_insight_sleep_down">💡 El sueño bajó %1$s respecto a la semana pasada — sigue en el rango normal.</string>
+    <string name="summary_insight_sleep_up">💡 El sueño subió %1$s respecto a la semana pasada.</string>
     <string name="summary_last_diaper">Último pañal</string>
     <string name="summary_last_feeding">Última toma</string>
     <string name="summary_last_sleep">Último sueño</string>

@@ -179,6 +179,29 @@ fun SummaryScreen(
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(d.time)) == today
     }
 
+    // ── Phase C: plain-language insight (on-device, V1 mock line) ──
+    // Today's sleep vs the 7-day daily average (excluding today). Hidden
+    // entirely when either side has no data — never show a wrong number.
+    val todaySleepMin = todaySleeps
+        .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+        .values
+        .sumOf { group -> group.first().duration }
+    val prior7Days = (1..7).map { i ->
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -i)
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+    }
+    val prior7SleepMin = prior7Days.sumOf { day ->
+        sleeps.filter { s ->
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(s.start)) == day
+        }.groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+            .values
+            .sumOf { group -> group.first().duration }
+    } / 7
+    val sleepDeltaMin = todaySleepMin - prior7SleepMin
+    val showSleepInsight = todaySleepMin > 0 && prior7SleepMin > 0 &&
+            kotlin.math.abs(sleepDeltaMin) >= 20   // under 20 min = noise
+
     // Elapsed time since last event
     fun timeAgo(time: Long): String {
         val mins = ((System.currentTimeMillis() - time) / 60000).toInt()
@@ -517,6 +540,35 @@ fun SummaryScreen(
                                 }
                             }
                         }
+                    )
+                }
+            }
+        }
+
+        // ── Phase C: plain-language insight (V1 mock) ──
+        if (showSleepInsight) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Text(
+                        text = if (sleepDeltaMin < 0)
+                            stringResource(
+                                R.string.summary_insight_sleep_down,
+                                Units.fmtDuration(-sleepDeltaMin)
+                            )
+                        else
+                            stringResource(
+                                R.string.summary_insight_sleep_up,
+                                Units.fmtDuration(sleepDeltaMin)
+                            ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(14.dp)
                     )
                 }
             }
