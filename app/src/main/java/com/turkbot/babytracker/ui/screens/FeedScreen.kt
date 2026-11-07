@@ -200,7 +200,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                         duration = minutes,
                                         note = null
                                     )
-                                    if (!saved) {
+                                    if (saved == null) {
                                         saveError = context.getString(R.string.feed_error_no_child)
                                     }
                                     viewModel.onLocalTimerStopped("Breast")
@@ -280,7 +280,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 duration = duration,
                                 note = noteText.ifBlank { null }
                             )
-                            if (saved) {
+                            if (saved != null) {
                                 HapticController.click(context)
                                 amountText = ""
                                 durationText = ""

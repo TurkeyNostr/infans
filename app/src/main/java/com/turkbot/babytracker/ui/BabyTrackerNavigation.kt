@@ -219,7 +219,9 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                     onNavigateToDiaper = { navController.navigate("diaper") },
                     onNavigateToPumping = { navController.navigate("pumping") },
                     onNavigateToHealth = { navController.navigate("health") },
-                    onNavigateToBath = { navController.navigate("bath") }
+                    onNavigateToBath = { navController.navigate("bath") },
+                    onNavigateToSleep = { navController.navigate(Screen.Sleep.route) },
+                    onNavigateToFeed = { navController.navigate(Screen.Feed.route) }
                 )
             }
             composable(Screen.Feed.route) { FeedScreen(viewModel) }

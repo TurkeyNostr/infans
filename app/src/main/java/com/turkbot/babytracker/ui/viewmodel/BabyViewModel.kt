@@ -128,16 +128,18 @@ class BabyViewModel(
     }
 
     // ── Feeding ───────────────────────────────────────
-    fun addFeeding(type: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?): Boolean {
+    // Returns the new record's id (for undo), or null when no child is active.
+    fun addFeeding(type: String, amount: Double?, unit: String?, breastSide: String?, duration: Int?, note: String?): String? {
         val child = activeChild.value
         if (child == null) {
             Log.w(TAG, "addFeeding: no active child — not saving")
-            return false
+            return null
         }
+        val id = UUID.randomUUID().toString()
         val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveFeeding(Feeding(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 childId = child.id,
                 time = System.currentTimeMillis(),
                 type = type,
@@ -150,7 +152,7 @@ class BabyViewModel(
             ))
             nostr.exportBackup()
         }
-        return true
+        return id
     }
 
     fun deleteFeeding(id: String) {
@@ -338,12 +340,14 @@ class BabyViewModel(
     }
 
     // ── Diaper ────────────────────────────────────────
-    fun addDiaper(contents: String, color: String?, note: String?) {
-        val child = activeChild.value ?: return
+    // Returns the new record's id (for undo), or "" when no child is active.
+    fun addDiaper(contents: String, color: String?, note: String?): String {
+        val child = activeChild.value ?: return ""
+        val id = UUID.randomUUID().toString()
         val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveDiaper(Diaper(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 childId = child.id,
                 time = System.currentTimeMillis(),
                 contents = contents,
@@ -353,6 +357,7 @@ class BabyViewModel(
             ))
             nostr.exportBackup()
         }
+        return id
     }
 
     fun deleteDiaper(id: String) {
@@ -370,12 +375,14 @@ class BabyViewModel(
     }
 
     // ── Pumping ───────────────────────────────────────
-    fun addPumping(amountMl: Double, unit: String, duration: Int?, side: String?, note: String?) {
-        val child = activeChild.value ?: return
+    // Returns the new record's id (for undo), or "" when no child is active.
+    fun addPumping(amountMl: Double, unit: String, duration: Int?, side: String?, note: String?): String {
+        val child = activeChild.value ?: return ""
+        val id = UUID.randomUUID().toString()
         val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.savePumping(Pumping(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 childId = child.id,
                 time = System.currentTimeMillis(),
                 amount = amountMl,
@@ -387,6 +394,7 @@ class BabyViewModel(
             ))
             nostr.exportBackup()
         }
+        return id
     }
 
     fun deletePumping(id: String) {
@@ -437,12 +445,14 @@ class BabyViewModel(
     }
 
     // ── Baths ─────────────────────────────────────────
-    fun addBath(type: String, note: String?) {
-        val child = activeChild.value ?: return
+    // Returns the new record's id (for undo), or "" when no child is active.
+    fun addBath(type: String, note: String?): String {
+        val child = activeChild.value ?: return ""
+        val id = UUID.randomUUID().toString()
         val author = nostr.signer.value?.pubkeyHex
         viewModelScope.launch {
             repo.saveBath(Bath(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 childId = child.id,
                 time = System.currentTimeMillis(),
                 type = type,
@@ -451,6 +461,7 @@ class BabyViewModel(
             ))
             nostr.exportBackup()
         }
+        return id
     }
 
     fun deleteBath(id: String) {

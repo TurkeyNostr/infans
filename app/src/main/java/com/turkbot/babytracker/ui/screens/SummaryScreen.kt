@@ -12,13 +12,16 @@
 
 package com.turkbot.babytracker.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BabyChangingStation
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HealthAndSafety
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -36,6 +40,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -59,7 +65,10 @@ import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.ui.components.BarChart
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
+import com.turkbot.babytracker.util.HapticController
 import com.turkbot.babytracker.util.Units
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -72,7 +81,9 @@ fun SummaryScreen(
     onNavigateToDiaper: () -> Unit = {},
     onNavigateToPumping: () -> Unit = {},
     onNavigateToHealth: () -> Unit = {},
-    onNavigateToBath: () -> Unit = {}
+    onNavigateToBath: () -> Unit = {},
+    onNavigateToSleep: () -> Unit = {},
+    onNavigateToFeed: () -> Unit = {}
 ) {
     val feedings by viewModel.feedings.collectAsState()
     val sleeps by viewModel.sleeps.collectAsState()
@@ -101,6 +112,59 @@ fun SummaryScreen(
     val lastSleep = sleeps.maxByOrNull { it.start }
     val lastDiaper = diapers.maxByOrNull { it.time }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // ── Phase A: quick-log smart defaults ──
+    val lastBottle = feedings.filter { it.type == "bottle" }.maxByOrNull { it.time }
+    val lastPumping = pumpings.maxByOrNull { it.time }
+
+    // ── Phase A: live session card ──
+    // Reads the same persisted timer state LiveTimer writes (start_<label>),
+    // so the card survives process death exactly like the timers themselves.
+    // Stop/end deliberately NOT duplicated here — the card deep-links to the
+    // Feed/Sleep tab where LiveTimer owns the stop logic (partner sync,
+    // alarm cancel). Single source of truth for session-ending side effects.
+    val timerPrefs = remember {
+        context.getSharedPreferences("live_timer_prefs", Context.MODE_PRIVATE)
+    }
+    val remoteSleepSession by viewModel.remoteSleepSession.collectAsState()
+    val remoteBreastSession by viewModel.remoteBreastSession.collectAsState()
+    val rSleep = remoteSleepSession  // local vals — delegated props can't smart-cast
+    val rBreast = remoteBreastSession
+    val localSleepStart = timerPrefs.getLong("start_Sleep", 0L)
+    val localBreastStart = timerPrefs.getLong("start_Breast", 0L)
+    // Remote session wins if both exist (same precedence LiveTimer uses).
+    val activeSession: Pair<String, Long> = when {
+        rSleep != null -> "sleep" to rSleep.startTime
+        rBreast != null -> "breast" to rBreast.startTime
+        localSleepStart > 0L -> "sleep" to localSleepStart
+        localBreastStart > 0L -> "breast" to localBreastStart
+        else -> "" to 0L
+    }
+    val (sessionKind, sessionStart) = activeSession
+    // Tick once per second only while a session is actually running.
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sessionKind) {
+        if (sessionKind.isNotEmpty()) {
+            while (true) {
+                nowMs = System.currentTimeMillis()
+                delay(1000)
+            }
+        }
+    }
+
+    // Undo support for quick-log: snackbar with an Undo action deletes the
+    // exact record that was just created (ids come back from the ViewModel).
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val undoLabel = stringResource(R.string.summary_snack_undo)
+    suspend fun showUndo(message: String, onDelete: () -> Unit) {
+        val result = snackbarHostState.showSnackbar(
+            message = message,
+            actionLabel = undoLabel,
+            withDismissAction = false
+        )
+        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) onDelete()
+    }
 
     val todayDiapers = diapers.filter { d ->
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(d.time)) == today
@@ -161,6 +225,7 @@ fun SummaryScreen(
             .sumOf { group -> group.first().duration } / 60.0
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -231,42 +296,65 @@ fun SummaryScreen(
             }
         }
 
-        // ── Last activity stats ────────────────────────────
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        stringResource(R.string.summary_last_activity),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    LastActivityRow(
-                        icon = Icons.Default.Restaurant,
-                        label = stringResource(R.string.summary_last_feeding),
-                        value = lastFeeding?.let { "${Units.feedTypeLabel(it.type)} · ${timeAgo(it.time)}" } ?: "—",
-                        iconTint = MaterialTheme.colorScheme.primary
-                    )
-                    LastActivityRow(
-                        icon = Icons.Default.Bedtime,
-                        label = stringResource(R.string.summary_last_sleep),
-                        value = lastSleep?.let { "${Units.fmtDuration(it.duration)} · ${timeAgo(it.start)}" } ?: "—",
-                        iconTint = MaterialTheme.colorScheme.tertiary
-                    )
-                    LastActivityRow(
-                        icon = Icons.Default.Spa,
-                        label = stringResource(R.string.summary_last_diaper),
-                        value = lastDiaper?.let { "${it.contents.replaceFirstChar { c -> c.uppercase() }} · ${timeAgo(it.time)}" } ?: "—",
-                        iconTint = MaterialTheme.colorScheme.secondary
-                    )
-                }
+        // ── Phase A: live session card — the running timer, front and center ──
+        if (sessionKind.isNotEmpty()) {
+            item {
+                LiveSessionCard(
+                    kind = sessionKind,
+                    startTime = sessionStart,
+                    nowMs = nowMs,
+                    isRemote = (sessionKind == "sleep" && rSleep != null) ||
+                            (sessionKind == "breast" && rBreast != null),
+                    onOpen = { if (sessionKind == "sleep") onNavigateToSleep() else onNavigateToFeed() }
+                )
             }
         }
+
+        // ── Phase A: status strip — state before history ──
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                StatusTile(
+                    icon = Icons.Default.Restaurant,
+                    label = stringResource(R.string.summary_last_feeding),
+                    value = lastFeeding?.let { timeAgo(it.time) } ?: "—",
+                    sub = lastFeeding?.let {
+                        if (it.type == "bottle" && it.amount != null && it.unit != null)
+                            Units.fmtAmount(it.amount, it.unit)
+                        else Units.feedTypeLabel(it.type)
+                    } ?: "",
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.primary
+                )
+                StatusTile(
+                    icon = Icons.Default.Spa,
+                    label = stringResource(R.string.summary_last_diaper),
+                    value = lastDiaper?.let { timeAgo(it.time) } ?: "—",
+                    sub = lastDiaper?.let {
+                        it.contents.replaceFirstChar { c -> c.uppercase() }
+                    } ?: "",
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.secondary
+                )
+                StatusTile(
+                    icon = Icons.Default.Bedtime,
+                    label = stringResource(R.string.summary_sleep),
+                    value = Units.fmtDuration(
+                        todaySleeps
+                            .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
+                            .values
+                            .sumOf { group -> group.first().duration }
+                    ),
+                    sub = stringResource(R.string.summary_today),
+                    modifier = Modifier.weight(1f),
+                    iconTint = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        }
+
+        // ── (Old "Last activity" card removed — superseded by the status strip) ──
 
         // ── Today's totals ─────────────────────────────────
         item {
@@ -319,6 +407,115 @@ fun SummaryScreen(
                         label = stringResource(R.string.summary_diapers),
                         value = if (totalDiapers > 0) "$totalDiapers" else "—",
                         iconTint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+        }
+
+        // ── Phase A: quick log — one tap, smart defaults, undo ──
+        item {
+            Column {
+                Text(
+                    stringResource(R.string.summary_quick_log),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    stringResource(R.string.summary_quick_log_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    QuickLogTile(
+                        icon = Icons.Default.LocalDrink,
+                        label = stringResource(R.string.summary_tile_bottle),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            // Smart default: last bottle's amount/unit, else 120 ml
+                            val amount = lastBottle?.amount ?: 120.0
+                            val unit = lastBottle?.unit ?: "ml"
+                            val id = viewModel.addFeeding(
+                                type = "bottle", amount = amount, unit = unit,
+                                breastSide = null, duration = null, note = null
+                            )
+                            if (id != null) {
+                                HapticController.click(context)
+                                scope.launch {
+                                    showUndo(
+                                        context.getString(R.string.summary_snack_bottle, Units.fmtAmount(amount, unit))
+                                    ) { viewModel.deleteFeeding(id) }
+                                }
+                            }
+                        }
+                    )
+                    QuickLogTile(
+                        icon = Icons.Default.ChildCare,
+                        label = stringResource(R.string.feed_type_breast),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            // Nursing needs the live timer (duration unknown) —
+                            // the Feed tab owns it; never write a 0-min record.
+                            onNavigateToFeed()
+                        }
+                    )
+                    QuickLogTile(
+                        icon = Icons.Default.BabyChangingStation,
+                        label = stringResource(R.string.summary_diaper),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val id = viewModel.addDiaper(contents = "wet", color = null, note = null)
+                            if (id.isNotEmpty()) {
+                                HapticController.click(context)
+                                scope.launch {
+                                    showUndo(context.getString(R.string.summary_snack_diaper)) {
+                                        viewModel.deleteDiaper(id)
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    QuickLogTile(
+                        icon = Icons.Default.Bathtub,
+                        label = stringResource(R.string.summary_bath),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            val id = viewModel.addBath(type = "full", note = null)
+                            if (id.isNotEmpty()) {
+                                HapticController.click(context)
+                                scope.launch {
+                                    showUndo(context.getString(R.string.summary_snack_bath)) {
+                                        viewModel.deleteBath(id)
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    QuickLogTile(
+                        icon = Icons.Default.WaterDrop,
+                        label = stringResource(R.string.summary_pumping),
+                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            // Smart default: last pump amount/unit, else 80 ml
+                            val amount = lastPumping?.amount ?: 80.0
+                            val unit = lastPumping?.unit
+                                ?: com.turkbot.babytracker.util.UnitPreferences.defaultPumpUnit(context)
+                            val id = viewModel.addPumping(
+                                amountMl = amount, unit = unit,
+                                duration = null, side = null, note = null
+                            )
+                            if (id.isNotEmpty()) {
+                                HapticController.click(context)
+                                scope.launch {
+                                    showUndo(
+                                        context.getString(R.string.summary_snack_pump, Units.fmtAmount(amount, unit))
+                                    ) { viewModel.deletePumping(id) }
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -541,6 +738,14 @@ fun SummaryScreen(
     }
 
     // ── Edit timestamp dialogs ──────────────────────────
+    // SnackbarHost floats over the list at the bottom of the screen.
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 8.dp)
+    )
+    }
     editingFeeding?.let { feeding ->
         EditTimestampDialog(
             initialEpochMillis = feeding.time,
@@ -652,35 +857,173 @@ private fun StatCard(
     }
 }
 
+/** Compact status tile for the top-of-screen strip (state before history). */
 @Composable
-private fun LastActivityRow(
+private fun StatusTile(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
+    sub: String,
+    modifier: Modifier = Modifier,
     iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(18.dp)
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            if (sub.isNotEmpty()) {
+                Text(
+                    sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** One-tap quick-log tile: icon + label, tap writes with smart defaults. */
+@Composable
+private fun QuickLogTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp,
+            pressedElevation = 4.dp
         )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
-        )
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Live "Sleeping / Nursing — started HH:mm" card for the Summary. Mirrors the
+ * running timer without owning any stop logic: the Open button deep-links to
+ * the Feed/Sleep tab where LiveTimer handles stopping (partner sync, alarms).
+ *
+ * @param kind  "sleep" or "breast"
+ * @param nowMs ticking clock from the caller (recomposes once per second)
+ */
+@Composable
+private fun LiveSessionCard(
+    kind: String,
+    startTime: Long,
+    nowMs: Long,
+    isRemote: Boolean,
+    onOpen: () -> Unit
+) {
+    val title = if (kind == "sleep") stringResource(R.string.summary_sleeping)
+                else stringResource(R.string.summary_nursing)
+    val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val elapsed = (nowMs - startTime).coerceAtLeast(0L)
+    val totalSec = elapsed / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    val elapsedText = if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+
+    Card(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (kind == "sleep") Icons.Default.Bedtime else Icons.Default.ChildCare,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Text(
+                    stringResource(R.string.summary_started_at, timeFmt.format(Date(startTime))),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                )
+                if (isRemote) {
+                    Text(
+                        stringResource(R.string.timer_started_by_partner),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+            Text(
+                elapsedText,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            TextButton(onClick = onOpen) {
+                Text(stringResource(R.string.summary_open_timer))
+            }
+        }
     }
 }
 
