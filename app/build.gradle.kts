@@ -75,6 +75,20 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Room 2.8.5 brings two jars carrying the same OSGI resource
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
+
+    splits {
+        abi {
+            // Every real device is arm64; shipping x86/x86_64/armv7 natives in the
+            // universal APK wasted ~2.6 MB per download. Zapstore auto-picks the
+            // right split; universal stays enabled as an emulator/fallback artifact.
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 }
