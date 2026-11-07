@@ -4,6 +4,10 @@
 # Source code repository (for display + APK fetching from GitHub Releases)
 repository: https://github.com/TurkeyNostr/infans
 
+# Publisher identity — the relay verifies this matches the npub that signs
+# the publish events, then whitelists it (zapstore.dev/docs/publish).
+pubkey: npub1vkd8fak0h37z2tzcmy699wwe2a0rd3ry4fj5f33h2gnuj9n2dmvs7u9g2t
+
 # App metadata
 name: Infans
 summary: A privacy-first baby tracking app with Nostr-based encrypted storage and parent-to-parent sync.
