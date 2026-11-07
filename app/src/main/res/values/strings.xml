@@ -439,6 +439,8 @@
     <string name="summary_started_at">started %1$s</string>
     <string name="summary_open_timer">Open</string>
     <string name="summary_today">today</string>
+    <string name="summary_sheet_diaper">Diaper change</string>
+    <string name="summary_sheet_save">Log for %1$s · now</string>
     <string name="summary_last_diaper">Last Diaper</string>
     <string name="summary_last_feeding">Last Feeding</string>
     <string name="summary_last_sleep">Last Sleep</string>

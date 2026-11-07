@@ -439,6 +439,8 @@
     <string name="summary_started_at">empezó a las %1$s</string>
     <string name="summary_open_timer">Abrir</string>
     <string name="summary_today">hoy</string>
+    <string name="summary_sheet_diaper">Cambio de pañal</string>
+    <string name="summary_sheet_save">Registrar para %1$s · ahora</string>
     <string name="summary_last_diaper">Último pañal</string>
     <string name="summary_last_feeding">Última toma</string>
     <string name="summary_last_sleep">Último sueño</string>

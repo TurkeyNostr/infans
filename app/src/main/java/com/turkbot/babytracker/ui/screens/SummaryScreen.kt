@@ -33,13 +33,17 @@ import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LocalDrink
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -72,6 +76,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(
     viewModel: BabyViewModel,
@@ -157,6 +162,10 @@ fun SummaryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val undoLabel = stringResource(R.string.summary_snack_undo)
+    // Phase B: diaper quick-log opens a bottom sheet (contents chips), not
+    // a silent default — V1 mock behavior, one extra tap for a real decision.
+    var showDiaperSheet by remember { mutableStateOf(false) }
+    var sheetContents by remember { mutableStateOf("wet") }
     suspend fun showUndo(message: String, onDelete: () -> Unit) {
         val result = snackbarHostState.showSnackbar(
             message = message,
@@ -466,17 +475,9 @@ fun SummaryScreen(
                         icon = Icons.Default.BabyChangingStation,
                         label = stringResource(R.string.summary_diaper),
                         modifier = Modifier.weight(1f),
-                        onClick = {
-                            val id = viewModel.addDiaper(contents = "wet", color = null, note = null)
-                            if (id.isNotEmpty()) {
-                                HapticController.click(context)
-                                scope.launch {
-                                    showUndo(context.getString(R.string.summary_snack_diaper)) {
-                                        viewModel.deleteDiaper(id)
-                                    }
-                                }
-                            }
-                        }
+                        // Bottom sheet instead of silent default — contents is a
+                        // decision worth one extra tap (matches the V1 mock).
+                        onClick = { showDiaperSheet = true }
                     )
                     QuickLogTile(
                         icon = Icons.Default.Bathtub,
@@ -737,6 +738,74 @@ fun SummaryScreen(
         }
     }
 
+    // ── Phase B: diaper bottom sheet (V1 mock) ─────────
+    if (showDiaperSheet) {
+        ModalBottomSheet(onDismissRequest = { showDiaperSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    stringResource(R.string.summary_sheet_diaper),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(16.dp))
+                // Two rows of two — 48dp+ targets, no chip overflow on
+                // narrow screens in either language.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("wet", "dirty", "mixed", "dry").chunked(2).forEach { rowTypes ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowTypes.forEach { t ->
+                                FilterChip(
+                                    selected = sheetContents == t,
+                                    onClick = { sheetContents = t },
+                                    label = {
+                                        Text(
+                                            diaperContentsLabel(t),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        val id = viewModel.addDiaper(
+                            contents = sheetContents, color = null, note = null
+                        )
+                        showDiaperSheet = false
+                        if (id.isNotEmpty()) {
+                            HapticController.click(context)
+                            scope.launch {
+                                showUndo(context.getString(R.string.summary_snack_diaper)) {
+                                    viewModel.deleteDiaper(id)
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),   // full-width 3 AM target
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(
+                        stringResource(R.string.summary_sheet_save, child?.name ?: ""),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+        }
+    }
+
     // ── Edit timestamp dialogs ──────────────────────────
     // SnackbarHost floats over the list at the bottom of the screen.
     SnackbarHost(
@@ -857,6 +926,15 @@ private fun StatCard(
     }
 }
 
+/** Localized label for a diaper contents value (locale-stable record values). */
+@Composable
+private fun diaperContentsLabel(type: String): String = when (type) {
+    "wet" -> stringResource(R.string.diaper_contents_wet)
+    "dirty" -> stringResource(R.string.diaper_contents_dirty)
+    "mixed" -> stringResource(R.string.diaper_contents_mixed)
+    else -> stringResource(R.string.diaper_contents_dry)
+}
+
 /** Compact status tile for the top-of-screen strip (state before history). */
 @Composable
 private fun StatusTile(
@@ -928,14 +1006,14 @@ private fun QuickLogTile(
         )
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp).fillMaxWidth(),
+            modifier = Modifier.padding(vertical = 14.dp, horizontal = 4.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(26.dp)
             )
             Spacer(Modifier.height(4.dp))
             Text(
