@@ -174,6 +174,19 @@ class NostrManager(context: Context) {
     @Volatile
     private var localBreastSessionId: String? = null
 
+    /** Wall-clock ms when WE started the current local session (0 = none).
+     *  Used to detect stale session_ended replays — see handleSessionEvent. */
+    @Volatile
+    private var localSleepSessionStartMs: Long = 0L
+    @Volatile
+    private var localBreastSessionStartMs: Long = 0L
+
+    /** Tolerance for partner clock skew when comparing an ended event's
+     *  created_at against a session start time. Phones' clocks can drift
+     *  by minutes; better to honour a slightly-early stop event (worst
+     *  case: one spurious force-stop) than to kill live timers. */
+    private val CLOCK_SKEW_TOLERANCE_MS = 60_000L
+
     // ── Force-stop signals for local timers ──────────────
     //
     // When the partner stops a session that WE started locally, we receive
@@ -1053,6 +1066,39 @@ class NostrManager(context: Context) {
         // Check if this is a session_ended event (empty content)
         val isEnded = event.tags.any { it.isNotEmpty() && it[0] == "session_ended" && it.getOrNull(1) == "true" }
         if (isEnded || event.content.isBlank()) {
+            // ── Stale-replay guard ─────────────────────────────
+            // Session events are replaceable (one per author+kind+d-tag) and the
+            // subscriptions below carry no 'since' filter, so EVERY reconnect
+            // re-delivers the partner's LATEST event for each timer label. If the
+            // last thing the partner did was STOP an old session, that stale
+            // session_ended event gets replayed on every reconnect — and without
+            // this guard it silently kills a currently-running local timer (the
+            // starter's timer vanishes while the partner still sees it running).
+            //
+            // An ended event is only honoured if it was created AFTER the session
+            // it should end, and hasn't already been handled.
+            val eventMs = event.createdAt * 1000L
+            val remote = if (isSleep) _remoteSleepSession.value else _remoteBreastSession.value
+            val localId = if (isSleep) localSleepSessionId else localBreastSessionId
+            val localStartMs = if (isSleep) localSleepSessionStartMs else localBreastSessionStartMs
+            val sessionStartMs = listOfNotNull(
+                remote?.startTime,
+                if (localId != null) localStartMs else null
+            ).maxOrNull()
+            if (sessionStartMs != null && eventMs < sessionStartMs - CLOCK_SKEW_TOLERANCE_MS) {
+                Dbg.info(
+                    Cat.SYNC,
+                    "Ignoring stale session_ended replay for ${if (isSleep) "Sleep" else "Breast"} " +
+                        "(event ${event.createdAt}s, live session started ${sessionStartMs / 1000}s)"
+                )
+                return
+            }
+            if (keyStore.isEventProcessed(event.id)) {
+                // Already handled this exact event — pure replay, nothing to do.
+                Dbg.info(Cat.SYNC, "Ignoring already-processed session_ended replay (${event.id.take(8)})")
+                return
+            }
+            keyStore.markEventProcessed(event.id)
             if (isSleep) {
                 _remoteSleepSession.value = null
                 // If we started this session locally, the partner just stopped
@@ -1060,6 +1106,7 @@ class NostrManager(context: Context) {
                 // record (the partner already logged one in onRemoteTimerStopped).
                 if (localSleepSessionId != null) {
                     localSleepSessionId = null
+                    localSleepSessionStartMs = 0L
                     _forceStopSleep.value = _forceStopSleep.value + 1
                     // Also clear the persisted timer state directly — the Sleep
                     // screen may not be composed (user on another tab), in which
@@ -1072,6 +1119,7 @@ class NostrManager(context: Context) {
                 _remoteBreastSession.value = null
                 if (localBreastSessionId != null) {
                     localBreastSessionId = null
+                    localBreastSessionStartMs = 0L
                     _forceStopBreast.value = _forceStopBreast.value + 1
                     clearTimerPrefs("Breast")
                     Dbg.info(Cat.SYNC, "Partner stopped our Breast session — force-stopping local timer")
@@ -1125,8 +1173,13 @@ class NostrManager(context: Context) {
         )
 
         // Track locally so we can dedupe the relay echo
-        if (label.equals("Sleep", ignoreCase = true)) localSleepSessionId = sessionId
-        else localBreastSessionId = sessionId
+        if (label.equals("Sleep", ignoreCase = true)) {
+            localSleepSessionId = sessionId
+            localSleepSessionStartMs = startTime
+        } else {
+            localBreastSessionId = sessionId
+            localBreastSessionStartMs = startTime
+        }
 
         // Publish to partner. Use amberMutex to serialize Amber prompts.
         val ok = amberMutex.withLock {
@@ -1147,8 +1200,13 @@ class NostrManager(context: Context) {
         val partnerNpubVal = _partnerNpub.value ?: return
         val partnerHex = npubToHex(partnerNpubVal) ?: return
 
-        if (label.equals("Sleep", ignoreCase = true)) localSleepSessionId = null
-        else localBreastSessionId = null
+        if (label.equals("Sleep", ignoreCase = true)) {
+            localSleepSessionId = null
+            localSleepSessionStartMs = 0L
+        } else {
+            localBreastSessionId = null
+            localBreastSessionStartMs = 0L
+        }
 
         amberMutex.withLock {
             backupService.endSession(label, signer, partnerHex)
