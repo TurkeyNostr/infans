@@ -26,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Diaper
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.HapticController
@@ -36,34 +38,36 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val DIAPER_CONTENTS = listOf(
-    "wet" to "Wet",
-    "dirty" to "Dirty",
-    "mixed" to "Mixed",
-    "dry" to "Dry"
-)
-private val DIAPER_COLORS = listOf(
-    "yellow" to "Yellow",
-    "brown" to "Brown",
-    "green" to "Green",
-    "black" to "Black"
-)
+private val DIAPER_CONTENTS = listOf("wet", "dirty", "mixed", "dry")
+private val DIAPER_COLORS = listOf("yellow", "brown", "green", "black")
 
+@Composable
+private fun contentsChipLabel(type: String): String = when (type) {
+    "wet" -> stringResource(R.string.diaper_contents_wet)
+    "dirty" -> stringResource(R.string.diaper_contents_dirty)
+    "mixed" -> stringResource(R.string.diaper_contents_mixed)
+    else -> stringResource(R.string.diaper_contents_dry)
+}
+
+@Composable
 private fun contentsLabel(contents: String): String = when (contents) {
-    "wet" -> "💧 Wet"
-    "dirty" -> "💩 Dirty"
-    "mixed" -> "💩💧 Mixed"
-    "dry" -> " Dry"
+    "wet" -> stringResource(R.string.diaper_card_wet)
+    "dirty" -> stringResource(R.string.diaper_card_dirty)
+    "mixed" -> stringResource(R.string.diaper_card_mixed)
+    "dry" -> stringResource(R.string.diaper_card_dry)
     else -> contents.replaceFirstChar { it.uppercase() }
 }
 
+@Composable
 private fun colorLabel(color: String): String = when (color) {
-    "yellow" -> "Yellow"
-    "brown" -> "Brown"
-    "green" -> "Green"
-    "black" -> "Black"
+    "yellow" -> stringResource(R.string.diaper_color_yellow)
+    "brown" -> stringResource(R.string.diaper_color_brown)
+    "green" -> stringResource(R.string.diaper_color_green)
+    "black" -> stringResource(R.string.diaper_color_black)
     else -> color
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +111,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Diaper Change",
+                        stringResource(R.string.diaper_log_change),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -117,11 +121,11 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        DIAPER_CONTENTS.forEach { (type, label) ->
+                        DIAPER_CONTENTS.forEach { type ->
                             FilterChip(
                                 selected = selectedContents == type,
                                 onClick = { selectedContents = type },
-                                label = { Text(label) }
+                                label = { Text(contentsChipLabel(type)) }
                             )
                         }
                     }
@@ -136,7 +140,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                 value = colorLabel(selectedColor),
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Color") },
+                                label = { Text(stringResource(R.string.diaper_color)) },
                                 trailingIcon = {
                                     ExposedDropdownMenuDefaults.TrailingIcon(
                                         expanded = colorExpanded
@@ -150,9 +154,9 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                 expanded = colorExpanded,
                                 onDismissRequest = { colorExpanded = false }
                             ) {
-                                DIAPER_COLORS.forEach { (value, label) ->
+                                DIAPER_COLORS.forEach { value ->
                                     DropdownMenuItem(
-                                        text = { Text(label) },
+                                        text = { Text(colorLabel(value)) },
                                         onClick = {
                                             selectedColor = value
                                             colorExpanded = false
@@ -166,7 +170,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.diaper_note)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -191,7 +195,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     ) {
                         Icon(Icons.Default.Spa, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Diaper")
+                        Text(stringResource(R.string.diaper_log_button))
                     }
                 }
             }
@@ -200,7 +204,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         // ── Today's diapers header ─────────────────────────
         item {
             Text(
-                "Today",
+                stringResource(R.string.diaper_today),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 4.dp)
@@ -216,7 +220,7 @@ fun DiaperScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     )
                 ) {
                     Text(
-                        "No diaper changes logged today",
+                        stringResource(R.string.diaper_no_changes_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -301,14 +305,14 @@ private fun DiaperCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.diaper_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.diaper_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

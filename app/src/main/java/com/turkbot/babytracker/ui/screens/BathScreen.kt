@@ -26,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Bath
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.HapticController
@@ -36,18 +38,17 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val BATH_TYPES = listOf(
-    "full" to "Full Bath",
-    "sponge" to "Sponge Bath",
-    "tub" to "Tub Bath"
-)
+private val BATH_TYPES = listOf("full", "sponge", "tub")
 
+@Composable
 private fun typeLabel(type: String): String = when (type) {
-    "full" -> "Full Bath"
-    "sponge" -> "Sponge Bath"
-    "tub" -> "Tub Bath"
+    "full" -> stringResource(R.string.bath_type_full)
+    "sponge" -> stringResource(R.string.bath_type_sponge)
+    "tub" -> stringResource(R.string.bath_type_tub)
     else -> type.replaceFirstChar { it.uppercase() }
 }
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,7 +90,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            "Log Bath",
+                            stringResource(R.string.bath_log_bath),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -99,11 +100,11 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            BATH_TYPES.forEach { (type, label) ->
+                            BATH_TYPES.forEach { type ->
                                 FilterChip(
                                     selected = selectedType == type,
                                     onClick = { selectedType = type },
-                                    label = { Text(label) }
+                                    label = { Text(typeLabel(type)) }
                                 )
                             }
                         }
@@ -111,7 +112,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         OutlinedTextField(
                             value = noteText,
                             onValueChange = { noteText = it },
-                            label = { Text("Note (optional)") },
+                            label = { Text(stringResource(R.string.bath_note)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -130,7 +131,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         ) {
                             Icon(Icons.Default.Bathtub, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Log Bath")
+                            Text(stringResource(R.string.bath_log_bath))
                         }
                     }
                 }
@@ -139,7 +140,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             // ── Today's baths header ───────────────────────────
             item {
                 Text(
-                    "Today",
+                    stringResource(R.string.bath_today),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 4.dp)
@@ -155,7 +156,7 @@ fun BathScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         )
                     ) {
                         Text(
-                            "No baths logged today",
+                            stringResource(R.string.bath_no_baths_today),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -234,14 +235,14 @@ private fun BathCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.bath_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.bath_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

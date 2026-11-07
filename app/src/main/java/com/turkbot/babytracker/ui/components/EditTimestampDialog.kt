@@ -20,7 +20,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -73,14 +75,14 @@ fun EditTimestampDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "Edit Date & Time",
+                    stringResource(R.string.edit_timestamp_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
                 // ── Date picker ────────────────────────────────
                 Text(
-                    "Date",
+                    stringResource(R.string.edit_timestamp_date),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -94,7 +96,7 @@ fun EditTimestampDialog(
 
                 // ── Time picker ────────────────────────────────
                 Text(
-                    "Time",
+                    stringResource(R.string.edit_timestamp_time),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -115,7 +117,7 @@ fun EditTimestampDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.edit_timestamp_cancel))
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = {
@@ -141,7 +143,7 @@ fun EditTimestampDialog(
                             onSave(cal.timeInMillis)
                         }
                     }) {
-                        Text("Save")
+                        Text(stringResource(R.string.edit_timestamp_save))
                     }
                 }
             }

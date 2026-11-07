@@ -41,8 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.ActiveSession
 import com.turkbot.babytracker.reminder.ReminderScheduler
 import kotlinx.coroutines.delay
@@ -82,6 +84,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun LiveTimer(
     label: String,
+    /**
+     * Display-only override for the label shown on screen. `label` is also the
+     * sync/prefs key (start_${label}, Nostr d-tag) and MUST stay locale-stable,
+     * so localized apps pass a translated string here instead.
+     */
+    displayLabel: String = label,
     alarmPresets: List<Int> = emptyList(),
     remoteSession: ActiveSession? = null,
     forceStopTick: Int = 0,
@@ -168,7 +176,7 @@ fun LiveTimer(
         ) {
             Column {
                 Text(
-                    text = "$label: ${formatElapsed(elapsed)}",
+                    text = stringResource(R.string.timer_label_elapsed, displayLabel, formatElapsed(elapsed)),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = if (running) MaterialTheme.colorScheme.primary
@@ -176,7 +184,7 @@ fun LiveTimer(
                 )
                 if (isRemote) {
                     Text(
-                        text = "Started by partner",
+                        text = stringResource(R.string.timer_started_by_partner),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 2.dp)
@@ -215,7 +223,7 @@ fun LiveTimer(
                 ) {
                     Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Stop & Log")
+                    Text(stringResource(R.string.timer_stop_and_log))
                 }
             } else {
                 Button(
@@ -238,7 +246,7 @@ fun LiveTimer(
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Start Timer")
+                    Text(stringResource(R.string.timer_start))
                 }
             }
         }
@@ -258,7 +266,7 @@ fun LiveTimer(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Alarm:",
+                    stringResource(R.string.timer_alarm_label),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -269,13 +277,13 @@ fun LiveTimer(
                             alarmMinutes = if (alarmMinutes == mins) 0 else mins
                         },
                         enabled = !localRunning,
-                        label = { Text("${mins}m") }
+                        label = { Text(stringResource(R.string.timer_alarm_minutes, mins)) }
                     )
                 }
                 if (alarmMinutes > 0 && localRunning) {
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        "alarm at ${alarmMinutes}m",
+                        stringResource(R.string.timer_alarm_at, alarmMinutes),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )

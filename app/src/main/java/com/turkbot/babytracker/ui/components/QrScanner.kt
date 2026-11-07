@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -54,6 +55,7 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import com.turkbot.babytracker.R
 import java.util.concurrent.Executors
 
 /**
@@ -105,7 +107,7 @@ fun QrScanner(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Camera permission needed to scan QR codes.",
+                    stringResource(R.string.qr_camera_permission_needed),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -119,7 +121,7 @@ fun QrScanner(
         ) {
             Icon(
                 Icons.Filled.Close,
-                contentDescription = "Close scanner",
+                contentDescription = stringResource(R.string.qr_close_scanner),
                 tint = Color.White
             )
         }

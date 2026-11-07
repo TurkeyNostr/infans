@@ -28,7 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Pumping
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
@@ -43,6 +45,14 @@ private val PUMP_UNITS = listOf("ml" to "ml", "fl_oz" to "fl oz")
 private val PUMP_SIDES = listOf("left", "right", "both")
 
 @OptIn(ExperimentalMaterial3Api::class)
+
+@Composable
+private fun pumpingSideLabel(side: String): String = when (side) {
+    "left" -> stringResource(R.string.pumping_side_left)
+    "right" -> stringResource(R.string.pumping_side_right)
+    else -> stringResource(R.string.pumping_side_both)
+}
+
 @Composable
 fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
     val pumpings by viewModel.pumpings.collectAsState()
@@ -85,7 +95,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Pumping Session",
+                        stringResource(R.string.pumping_log_session),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -99,7 +109,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                         OutlinedTextField(
                             value = amountText,
                             onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                            label = { Text("Amount") },
+                            label = { Text(stringResource(R.string.pumping_amount)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f)
@@ -123,7 +133,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                                 onClick = { selectedSide = side },
                                 shape = SegmentedButtonDefaults.itemShape(index, PUMP_SIDES.size)
                             ) {
-                                Text(side.replaceFirstChar { it.uppercase() })
+                                Text(pumpingSideLabel(side))
                             }
                         }
                     }
@@ -132,7 +142,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     OutlinedTextField(
                         value = durationText,
                         onValueChange = { durationText = it.filter { c -> c.isDigit() } },
-                        label = { Text("Duration (minutes)") },
+                        label = { Text(stringResource(R.string.pumping_duration_minutes)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
@@ -141,7 +151,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.pumping_note)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -174,7 +184,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     ) {
                         Icon(Icons.Default.WaterDrop, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Pumping")
+                        Text(stringResource(R.string.pumping_log_button))
                     }
                 }
             }
@@ -183,7 +193,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         // ── Today's pumpings header ─────────────────────────
         item {
             Text(
-                "Today",
+                stringResource(R.string.pumping_today),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 4.dp)
@@ -199,7 +209,7 @@ fun PumpingScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     )
                 ) {
                     Text(
-                        "No pumping sessions logged today",
+                        stringResource(R.string.pumping_no_sessions_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -246,7 +256,7 @@ private fun PumpingCard(
         "fl_oz" -> Units.fmtAmount(Units.mlToFlOz(pumping.amount), "fl_oz")
         else -> Units.fmtAmount(pumping.amount, "ml")
     }
-    val sideLabel = pumping.side?.replaceFirstChar { it.uppercase() } ?: ""
+    val sideLabel = pumping.side?.let { pumpingSideLabel(it) } ?: ""
     val durationLabel = pumping.duration?.let { Units.fmtAmount(it.toDouble(), "min") } ?: ""
 
     Card(
@@ -296,14 +306,14 @@ private fun PumpingCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.pumping_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.pumping_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -53,6 +54,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.turkbot.babytracker.BabyTrackerApp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.ui.screens.ChartsScreen
 import com.turkbot.babytracker.ui.screens.DiaperScreen
@@ -77,15 +79,24 @@ import com.turkbot.babytracker.ui.viewmodel.BabyViewModelFactory
 
 sealed class Screen(
     val route: String,
-    val label: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    data object Feed : Screen("feed", "Feed", Icons.Filled.Restaurant, Icons.Outlined.Restaurant)
-    data object Sleep : Screen("sleep", "Sleep", Icons.Filled.Bedtime, Icons.Outlined.Bedtime)
-    data object Weight : Screen("weight", "Weight", Icons.Filled.MonitorWeight, Icons.Outlined.MonitorWeight)
-    data object Summary : Screen("summary", "Home", Icons.Filled.Dashboard, Icons.Outlined.Dashboard)
-    data object Notes : Screen("notes", "Notes", Icons.AutoMirrored.Filled.Note, Icons.AutoMirrored.Outlined.Note)
+    data object Feed : Screen("feed", Icons.Filled.Restaurant, Icons.Outlined.Restaurant)
+    data object Sleep : Screen("sleep", Icons.Filled.Bedtime, Icons.Outlined.Bedtime)
+    data object Weight : Screen("weight", Icons.Filled.MonitorWeight, Icons.Outlined.MonitorWeight)
+    data object Summary : Screen("summary", Icons.Filled.Dashboard, Icons.Outlined.Dashboard)
+    data object Notes : Screen("notes", Icons.AutoMirrored.Filled.Note, Icons.AutoMirrored.Outlined.Note)
+}
+
+/** Localized label for a bottom-navigation destination. */
+@Composable
+private fun screenLabel(screen: Screen): String = when (screen) {
+    Screen.Feed -> stringResource(R.string.nav_feed)
+    Screen.Sleep -> stringResource(R.string.nav_sleep)
+    Screen.Weight -> stringResource(R.string.nav_weight)
+    Screen.Summary -> stringResource(R.string.nav_home)
+    Screen.Notes -> stringResource(R.string.nav_notes)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,7 +130,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text("Infans") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     // Sync status indicator — colored dot showing relay sync state
                     val syncState by app.nostrManager.syncState.collectAsState()
@@ -130,10 +141,10 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                         NostrManager.SyncState.OFFLINE -> Color(0xFF9E9E9E)
                     }
                     val syncDesc = when (syncState) {
-                        NostrManager.SyncState.SYNCED -> "Synced"
-                        NostrManager.SyncState.PENDING -> "Sync pending"
-                        NostrManager.SyncState.DISCONNECTED -> "Relay disconnected"
-                        NostrManager.SyncState.OFFLINE -> "Offline mode"
+                        NostrManager.SyncState.SYNCED -> stringResource(R.string.sync_synced)
+                        NostrManager.SyncState.PENDING -> stringResource(R.string.sync_pending)
+                        NostrManager.SyncState.DISCONNECTED -> stringResource(R.string.sync_relay_disconnected)
+                        NostrManager.SyncState.OFFLINE -> stringResource(R.string.sync_offline)
                     }
                     Canvas(modifier = Modifier
                         .padding(end = 12.dp)
@@ -148,7 +159,7 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                             launchSingleTop = true
                         }
                     }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.nav_settings))
                     }
                 },
                 scrollBehavior = scrollBehavior,
@@ -166,10 +177,10 @@ fun BabyTrackerNavigation(app: BabyTrackerApp) {
                         icon = {
                             Icon(
                                 imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                contentDescription = screen.label
+                                contentDescription = screenLabel(screen)
                             )
                         },
-                        label = { Text(screen.label) },
+                        label = { Text(screenLabel(screen)) },
                         selected = selected,
                         onClick = {
                             navController.navigate(screen.route) {

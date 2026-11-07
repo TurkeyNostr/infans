@@ -51,7 +51,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.Vaccine
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.HapticController
@@ -93,14 +95,14 @@ fun VaccineSection(viewModel: BabyViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Vaccine Records",
+                    stringResource(R.string.vaccine_records_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Button(onClick = { showAddDialog = true }) {
                     Icon(Icons.Default.Vaccines, contentDescription = null)
                     Spacer(Modifier.height(4.dp))
-                    Text(" Add Vaccine")
+                    Text(stringResource(R.string.vaccine_add_button))
                 }
             }
         }
@@ -115,7 +117,7 @@ fun VaccineSection(viewModel: BabyViewModel) {
         if (upcoming.isNotEmpty()) {
             item {
                 Text(
-                    "Upcoming",
+                    stringResource(R.string.vaccine_upcoming),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -135,7 +137,7 @@ fun VaccineSection(viewModel: BabyViewModel) {
         if (past.isNotEmpty()) {
             item {
                 Text(
-                    "History",
+                    stringResource(R.string.vaccine_history),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
@@ -162,7 +164,7 @@ fun VaccineSection(viewModel: BabyViewModel) {
                     )
                 ) {
                     Text(
-                        "No vaccine records yet. Tap \"Add Vaccine\" to log one.",
+                        stringResource(R.string.vaccine_empty_state),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -198,10 +200,10 @@ fun VaccineSection(viewModel: BabyViewModel) {
                         viewModel.updateVaccineDate(vaccine.id, it)
                     }
                     editingVaccine = null
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.vaccine_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { editingVaccine = null }) { Text("Cancel") }
+                TextButton(onClick = { editingVaccine = null }) { Text(stringResource(R.string.vaccine_cancel)) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -238,15 +240,17 @@ private fun VaccineCard(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "Given: ${dateFormat.format(Date(vaccine.dateAdministered))}" +
+                    stringResource(R.string.vaccine_given, dateFormat.format(Date(vaccine.dateAdministered))) +
                         (Units.fmtAuthor(vaccine.authorPubkey, myPubkeyHex)?.let { " · $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (vaccine.nextDueDate != null) {
-                    val dueText = if (isUpcoming) "Next due: " else "Next was due: "
+                    val dueDateText = dateFormat.format(Date(vaccine.nextDueDate))
+                    val dueText = if (isUpcoming) stringResource(R.string.vaccine_next_due, dueDateText)
+                        else stringResource(R.string.vaccine_next_was_due, dueDateText)
                     Text(
-                        dueText + dateFormat.format(Date(vaccine.nextDueDate)),
+                        dueText,
                         style = MaterialTheme.typography.bodySmall,
                         color = if (isUpcoming)
                             MaterialTheme.colorScheme.primary
@@ -264,11 +268,11 @@ private fun VaccineCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onEditDate) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit date",
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.vaccine_edit_date),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete",
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.vaccine_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -299,10 +303,10 @@ private fun AddVaccineDialog(
                 TextButton(onClick = {
                     nextDateMs = nextDateState.selectedDateMillis
                     showNextDatePicker = false
-                }) { Text("Set") }
+                }) { Text(stringResource(R.string.vaccine_set)) }
             },
             dismissButton = {
-                TextButton(onClick = { showNextDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showNextDatePicker = false }) { Text(stringResource(R.string.vaccine_cancel)) }
             }
         ) {
             DatePicker(state = nextDateState)
@@ -317,24 +321,24 @@ private fun AddVaccineDialog(
                     val dateMs = administeredDateState.selectedDateMillis ?: System.currentTimeMillis()
                     onSave(selectedType, dateMs, nextDateMs, doseText.ifBlank { null }, noteText.ifBlank { null })
                 }
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.vaccine_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.vaccine_cancel)) }
         }
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Add Vaccine Record", style = MaterialTheme.typography.titleMedium,
+            Text(stringResource(R.string.vaccine_add_record_title), style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold)
 
             // Vaccine type dropdown — using OutlinedTextField for simplicity
             OutlinedTextField(
                 value = selectedType,
                 onValueChange = { selectedType = it },
-                label = { Text("Vaccine type") },
+                label = { Text(stringResource(R.string.vaccine_type)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -356,7 +360,7 @@ private fun AddVaccineDialog(
 
             Spacer(Modifier.height(4.dp))
 
-            Text("Date Administered", style = MaterialTheme.typography.labelMedium,
+            Text(stringResource(R.string.vaccine_date_administered), style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             DatePicker(state = administeredDateState)
 
@@ -366,21 +370,21 @@ private fun AddVaccineDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Next Due Date", style = MaterialTheme.typography.labelMedium,
+                Text(stringResource(R.string.vaccine_next_due_date), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { showNextDatePicker = true }) {
-                    Text(nextDateMs?.let { dateFormat.format(Date(it)) } ?: "Set date")
+                    Text(nextDateMs?.let { dateFormat.format(Date(it)) } ?: stringResource(R.string.vaccine_set_date))
                 }
                 if (nextDateMs != null) {
-                    TextButton(onClick = { nextDateMs = null }) { Text("Clear") }
+                    TextButton(onClick = { nextDateMs = null }) { Text(stringResource(R.string.vaccine_clear)) }
                 }
             }
 
             OutlinedTextField(
                 value = doseText,
                 onValueChange = { doseText = it },
-                label = { Text("Dose number (optional)") },
-                placeholder = { Text("e.g. 1, 2, Booster") },
+                label = { Text(stringResource(R.string.vaccine_dose_number)) },
+                placeholder = { Text(stringResource(R.string.vaccine_dose_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -388,7 +392,7 @@ private fun AddVaccineDialog(
             OutlinedTextField(
                 value = noteText,
                 onValueChange = { noteText = it },
-                label = { Text("Note (optional)") },
+                label = { Text(stringResource(R.string.vaccine_note)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

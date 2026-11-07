@@ -28,7 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Sleep
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.components.LiveTimer
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -90,7 +92,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Sleep Session",
+                        stringResource(R.string.sleep_log_session),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -98,6 +100,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     // ── Live timer ──
                     LiveTimer(
                         label = "Sleep",
+                        displayLabel = stringResource(R.string.summary_sleep),
                         alarmPresets = listOf(30, 45, 60, 90),
                         remoteSession = remoteSleepSession,
                         forceStopTick = forceStopSleep,
@@ -119,7 +122,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
 
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Or enter manually:",
+                        stringResource(R.string.sleep_or_enter_manually),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -127,7 +130,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = startText,
                         onValueChange = { startText = it },
-                        label = { Text("Start time (HH:mm)") },
+                        label = { Text(stringResource(R.string.sleep_start_time)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -139,7 +142,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                         OutlinedTextField(
                             value = hoursText,
                             onValueChange = { hoursText = it.filter { c -> c.isDigit() } },
-                            label = { Text("Hours") },
+                            label = { Text(stringResource(R.string.sleep_hours)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
@@ -147,7 +150,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                         OutlinedTextField(
                             value = minutesText,
                             onValueChange = { minutesText = it.filter { c -> c.isDigit() } },
-                            label = { Text("Minutes") },
+                            label = { Text(stringResource(R.string.sleep_minutes)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
@@ -157,7 +160,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.sleep_note)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -184,7 +187,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     ) {
                         Icon(Icons.Default.Bedtime, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Sleep")
+                        Text(stringResource(R.string.sleep_log_button))
                     }
                 }
             }
@@ -201,7 +204,7 @@ fun SleepScreen(viewModel: BabyViewModel) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Text(
-                        "No sleep sessions logged yet",
+                        stringResource(R.string.sleep_no_sessions),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -284,14 +287,14 @@ private fun SleepCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.sleep_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete sleep session",
+                        contentDescription = stringResource(R.string.sleep_delete_session),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

@@ -39,7 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.theme.ThemePack
 import com.turkbot.babytracker.data.entities.Child
 import com.turkbot.babytracker.debug.DebugLogger as Dbg
@@ -100,7 +102,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
     ) {
         // ─── Appearance ───────────────────────────────────
         item {
-            SectionHeader("Appearance")
+            SectionHeader(stringResource(R.string.settings_appearance))
         }
 
         item {
@@ -115,12 +117,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Color Theme",
+                        stringResource(R.string.settings_color_theme),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Pick a color scheme. Material You uses your phone's wallpaper colors (Android 12+).",
+                        stringResource(R.string.settings_color_theme_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -167,7 +169,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "The app will restart to apply the new theme and icon.",
+                        stringResource(R.string.settings_theme_restart_note),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -177,7 +179,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Measurement Units ───────────────────────────
         item {
-            SectionHeader("Measurement Units")
+            SectionHeader(stringResource(R.string.settings_measurement_units))
         }
 
         item {
@@ -195,17 +197,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Display Units",
+                        stringResource(R.string.settings_display_units),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Sets the default for feeding, pumping, weight, and height across all screens.",
+                        stringResource(R.string.settings_display_units_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
-                    val systems = listOf("metric" to "Metric (ml, kg, cm)", "imperial" to "Imperial (fl oz, lb, in)")
+                    val systems = listOf("metric" to stringResource(R.string.settings_units_metric_full), "imperial" to stringResource(R.string.settings_units_imperial_full))
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         systems.forEachIndexed { index, (value, label) ->
                             SegmentedButton(
@@ -216,7 +218,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         .edit().putString("unit_system", value).apply()
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(index, systems.size)
-                            ) { Text(if (value == "metric") "Metric" else "Imperial") }
+                            ) { Text(if (value == "metric") stringResource(R.string.settings_metric) else stringResource(R.string.settings_imperial)) }
                         }
                     }
                 }
@@ -225,7 +227,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Nostr Identity ─────────────────────────────
         item {
-            SectionHeader("Nostr Identity")
+            SectionHeader(stringResource(R.string.settings_nostr_identity))
         }
 
         item {
@@ -239,7 +241,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     if (signer != null) {
                         val myNip05 by nostrManager.myNip05.collectAsState()
                         Text(
-                            if (myNip05 != null) "Your NIP-05" else "Your npub",
+                            if (myNip05 != null) stringResource(R.string.settings_your_nip05) else stringResource(R.string.settings_your_npub),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -253,7 +255,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             onClick = {},
                             label = {
                                 Text(
-                                    if (signer!!.type == SignerType.AMBER) "Amber (NIP-55)" else "Local key"
+                                    if (signer!!.type == SignerType.AMBER) stringResource(R.string.settings_amber_nip55) else stringResource(R.string.settings_local_key)
                                 )
                             },
                             leadingIcon = {
@@ -262,7 +264,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "Share this ${if (myNip05 != null) "NIP-05" else "npub"} with the other parent so they can sync data with you.",
+                            stringResource(R.string.settings_share_identity_desc, if (myNip05 != null) "NIP-05" else "npub"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -281,7 +283,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Copy ${if (myNip05 != null) "NIP-05" else "npub"}")
+                            Text(stringResource(R.string.settings_copy_identity, if (myNip05 != null) "NIP-05" else "npub"))
                         }
                         Spacer(Modifier.height(8.dp))
                         // ── Show QR code for pairing ──
@@ -291,7 +293,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         ) {
                             Icon(Icons.Default.QrCode, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Show My QR")
+                            Text(stringResource(R.string.settings_show_my_qr))
                         }
                         Spacer(Modifier.height(16.dp))
                         // ── Export private key (local keys only) ──
@@ -306,19 +308,19 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(
-                                            "Your Private Key (nsec)",
+                                            stringResource(R.string.settings_private_key_title),
                                             style = MaterialTheme.typography.titleSmall,
                                             color = MaterialTheme.colorScheme.onErrorContainer,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            "Anyone with this key can read your encrypted backups. Store it somewhere safe. Do not share it with anyone.",
+                                            stringResource(R.string.settings_private_key_warning),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onErrorContainer
                                         )
                                         Spacer(Modifier.height(4.dp))
                                         Text(
-                                            nsec ?: "Key not available",
+                                            nsec ?: stringResource(R.string.settings_key_not_available),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onErrorContainer,
                                             fontWeight = FontWeight.Medium
@@ -329,17 +331,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("nsec", nsec))
                                                 }
-                                            }) { Text("Copy") }
+                                            }) { Text(stringResource(R.string.settings_copy)) }
                                             OutlinedButton(onClick = {
                                                 if (nsec != null) {
                                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                         type = "text/plain"
                                                         putExtra(Intent.EXTRA_TEXT, nsec)
                                                     }
-                                                    context.startActivity(Intent.createChooser(shareIntent, "Save nsec"))
+                                                    context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.settings_save_nsec)))
                                                 }
-                                            }) { Text("Share") }
-                                            TextButton(onClick = { showNsec = false }) { Text("Hide") }
+                                            }) { Text(stringResource(R.string.settings_share)) }
+                                            TextButton(onClick = { showNsec = false }) { Text(stringResource(R.string.settings_hide)) }
                                         }
                                     }
                                 }
@@ -350,7 +352,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Icon(Icons.Default.Key, contentDescription = null)
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Show My Private Key")
+                                    Text(stringResource(R.string.settings_show_private_key))
                                 }
                             }
                             Spacer(Modifier.height(16.dp))
@@ -362,20 +364,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Log Out / Reset")
+                            Text(stringResource(R.string.settings_log_out_reset))
                         }
                         // ── Offer Amber switch if currently using a local key ──
                         if (signer!!.type != SignerType.AMBER) {
                             Spacer(Modifier.height(16.dp))
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             Text(
-                                "Switch to Amber signer (NIP-55):",
+                                stringResource(R.string.settings_switch_to_amber),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Tip: In Amber, select \"Manual\" sign policy (not Basic) to limit permissions to only what Infans needs.",
+                                stringResource(R.string.settings_amber_tip),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -387,7 +389,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         scope.launch {
                                             val result = nostrManager.loginWithAmber()
                                             if (result == null) {
-                                                amberError = "Amber login failed or was denied"
+                                                amberError = context.getString(R.string.settings_amber_login_failed)
                                             }
                                         }
                                     } else {
@@ -396,7 +398,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from Zapstore: zapstore.dev/apps/com.greenart7c3.amber"
+                                            amberError = context.getString(R.string.settings_install_amber_zapstore)
                                         }
                                     }
                                 },
@@ -404,11 +406,11 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             ) {
                                 Icon(Icons.Default.AccountCircle, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text(if (amberInstalled) "Log in with Amber" else "Log in with Amber (install)")
+                                Text(if (amberInstalled) stringResource(R.string.settings_login_amber) else stringResource(R.string.settings_login_amber_install))
                             }
                             if (!amberInstalled) {
                                 Text(
-                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it.",
+                                    stringResource(R.string.settings_amber_desc),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -423,7 +425,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         }
                     } else {
                         Text(
-                            "No Nostr identity yet.",
+                            stringResource(R.string.settings_no_identity),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(Modifier.height(16.dp))
@@ -434,13 +436,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             ) {
                                 Icon(Icons.Default.Key, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Generate New Key")
+                                Text(stringResource(R.string.settings_generate_new_key))
                             }
                             OutlinedButton(
                                 onClick = { showImportKey = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Import nsec")
+                                Text(stringResource(R.string.settings_import_nsec))
                             }
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             Button(
@@ -450,7 +452,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         scope.launch {
                                             val result = nostrManager.loginWithAmber()
                                             if (result == null) {
-                                                amberError = "Amber login failed or was denied"
+                                                amberError = context.getString(R.string.settings_amber_login_failed)
                                             }
                                         }
                                     } else {
@@ -459,7 +461,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         try {
                                             context.startActivity(intent)
                                         } catch (e: Exception) {
-                                            amberError = "Install Amber from Zapstore: zapstore.dev/apps/com.greenart7c3.amber"
+                                            amberError = context.getString(R.string.settings_install_amber_zapstore)
                                         }
                                     }
                                 },
@@ -467,11 +469,11 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             ) {
                                 Icon(Icons.Default.AccountCircle, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text(if (amberInstalled) "Log in with Amber" else "Log in with Amber (install)")
+                                Text(if (amberInstalled) stringResource(R.string.settings_login_amber) else stringResource(R.string.settings_login_amber_install))
                             }
                             if (!amberInstalled) {
                                 Text(
-                                    "Amber is a Nostr signer app — your private key stays in Amber, this app never sees it. Tap above to install from Zapstore.",
+                                    stringResource(R.string.settings_amber_desc_install),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -491,7 +493,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Partner Sync ─────────────────────────────────
         item {
-            SectionHeader("Partner Sync")
+            SectionHeader(stringResource(R.string.settings_partner_sync))
         }
 
         item {
@@ -504,9 +506,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                 Column(modifier = Modifier.padding(16.dp)) {
                     if (signer != null) {
                         Text(
-                            "Link with the other parent to share baby data automatically. " +
-                                "When either of you adds a feeding, sleep, or weight, the other " +
-                                "phone receives it on next sync.",
+                            stringResource(R.string.settings_partner_sync_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -543,7 +543,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Unlink Partner")
+                                Text(stringResource(R.string.settings_unlink_partner))
                             }
                         } else {
                             OutlinedTextField(
@@ -552,8 +552,8 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                     partnerNpubInput = it
                                     partnerError = null
                                 },
-                                label = { Text("Partner's npub or NIP-05") },
-                                placeholder = { Text("npub1... or name@domain.com") },
+                                label = { Text(stringResource(R.string.settings_partner_label)) },
+                                placeholder = { Text(stringResource(R.string.settings_partner_placeholder)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -576,13 +576,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Icon(Icons.Default.QrCodeScanner, contentDescription = null)
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Scan QR")
+                                    Text(stringResource(R.string.settings_scan_qr))
                                 }
                                 Button(
                                     onClick = {
                                         val input = partnerNpubInput.trim()
                                         if (input.isEmpty()) {
-                                            partnerError = "Enter an npub or NIP-05 identifier"
+                                            partnerError = context.getString(R.string.settings_partner_error_empty)
                                         } else {
                                             scope.launch {
                                                 val success = viewModel.setPartnerIdentifier(input)
@@ -591,20 +591,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                                     // Trigger a backup so the partner gets our data immediately
                                                     viewModel.exportBackup()
                                                 } else {
-                                                    partnerError = "Could not resolve — check the identifier"
+                                                    partnerError = context.getString(R.string.settings_partner_error_resolve)
                                                 }
                                             }
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("Link Partner")
+                                    Text(stringResource(R.string.settings_link_partner))
                                 }
                             }
                         }
                     } else {
                         Text(
-                            "Sign in with a Nostr identity first to enable partner sync.",
+                            stringResource(R.string.settings_partner_needs_identity),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -630,14 +630,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Relays",
+                        stringResource(R.string.settings_relays),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "These relays receive your encrypted backups and partner-sync events. " +
-                        "By default, relays come from your Nostr NIP-65 list (kind 10002). " +
-                        "You can override them here if needed.",
+                        stringResource(R.string.settings_relays_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -669,8 +667,8 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 relayInput = it
                                 relayError = null
                             },
-                            label = { Text("Relay URLs (one per line)") },
-                            placeholder = { Text("wss://relay.example.com\nwss://another.relay.com") },
+                            label = { Text(stringResource(R.string.settings_relay_urls_label)) },
+                            placeholder = { Text(stringResource(R.string.settings_relay_urls_placeholder)) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 100.dp),
@@ -696,25 +694,25 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         }
                                         .distinct()
                                     if (urls.isEmpty()) {
-                                        relayError = "Enter at least one relay URL"
+                                        relayError = context.getString(R.string.settings_relay_error_empty)
                                         return@TextButton
                                     }
                                     if (urls.any { !it.startsWith("wss://") && !it.startsWith("ws://") }) {
-                                        relayError = "Invalid URL format"
+                                        relayError = context.getString(R.string.settings_relay_error_invalid)
                                         return@TextButton
                                     }
                                     nostrManager.applyCustomRelays(urls)
                                     showRelayEditor = false
                                     relayInput = ""
                                 }
-                            ) { Text("Apply") }
+                            ) { Text(stringResource(R.string.settings_apply)) }
                             TextButton(
                                 onClick = {
                                     showRelayEditor = false
                                     relayInput = ""
                                     relayError = null
                                 }
-                            ) { Text("Cancel") }
+                            ) { Text(stringResource(R.string.settings_cancel)) }
                         }
                     } else {
                         TextButton(
@@ -722,7 +720,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 relayInput = currentRelays.joinToString("\n")
                                 showRelayEditor = true
                             }
-                        ) { Text("Edit Relays") }
+                        ) { Text(stringResource(R.string.settings_edit_relays)) }
                     }
                 }
             }
@@ -752,10 +750,10 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Sync Diagnostic", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_sync_diagnostic), style = MaterialTheme.typography.bodyLarge)
                         AssistChip(
                             onClick = {},
-                            label = { Text(if (relayConnected) "Connected" else "Disconnected") },
+                            label = { Text(if (relayConnected) stringResource(R.string.settings_connected) else stringResource(R.string.settings_disconnected)) },
                             colors = AssistChipDefaults.assistChipColors(
                                 containerColor = if (relayConnected)
                                     MaterialTheme.colorScheme.primaryContainer
@@ -807,7 +805,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
                     if (partnerNpubState == null) {
                         Text(
-                            "Set partner npub to run a full diagnostic.",
+                            stringResource(R.string.settings_diag_need_partner),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -834,40 +832,40 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         enabled = !diagRunning && relayConnected && partnerNpubState != null,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (diagRunning) "Checking\u2026 (5s)" else "Run Diagnostic")
+                        Text(if (diagRunning) stringResource(R.string.settings_checking) else stringResource(R.string.settings_run_diagnostic))
                     }
 
                     // Relay overlap
                     if (relayMatch != null) {
                         HorizontalDivider()
-                        Text("Relay Match", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_relay_match), style = MaterialTheme.typography.bodyLarge)
                         if (relayMatch!!.overlap.isEmpty()) {
                             Text(
-                                "\u26a0 No shared relays \u2014 you and your partner are on different relays.",
+                                stringResource(R.string.settings_no_shared_relays),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                             Text(
-                                "Your relays: ${relayMatch!!.myRelays.joinToString { it.removePrefix("wss://") }}",
+                                stringResource(R.string.settings_your_relays, relayMatch!!.myRelays.joinToString { it.removePrefix("wss://") }),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (relayMatch!!.partnerRelays.isEmpty()) {
                                 Text(
-                                    "Partner: no NIP-65 relay list found",
+                                    stringResource(R.string.settings_partner_no_nip65),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             } else {
                                 Text(
-                                    "Partner: ${relayMatch!!.partnerRelays.joinToString { it.removePrefix("wss://") }}",
+                                    stringResource(R.string.settings_partner_relays, relayMatch!!.partnerRelays.joinToString { it.removePrefix("wss://") }),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         } else {
                             Text(
-                                "\u2713 ${relayMatch!!.overlap.size} shared relay(s)",
+                                stringResource(R.string.settings_shared_relays_count, relayMatch!!.overlap.size),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -884,7 +882,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     // Partner data on relays
                     if (partnerReachable != null) {
                         HorizontalDivider()
-                        Text("Partner Data on Relays", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_partner_data), style = MaterialTheme.typography.bodyLarge)
                         partnerReachable!!.forEach { (url, reachable) ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -897,7 +895,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 )
                                 AssistChip(
                                     onClick = {},
-                                    label = { Text(if (reachable) "Found" else "No data") },
+                                    label = { Text(if (reachable) stringResource(R.string.settings_found) else stringResource(R.string.settings_no_data)) },
                                     colors = AssistChipDefaults.assistChipColors(
                                         containerColor = if (reachable)
                                             MaterialTheme.colorScheme.primaryContainer
@@ -914,7 +912,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     // Partner status
                     if (partnerStatus != null) {
                         HorizontalDivider()
-                        Text("Partner Status", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_partner_status), style = MaterialTheme.typography.bodyLarge)
                         when (val status = partnerStatus!!) {
                             is PartnerStatus.Mutual -> {
                                 Row(
@@ -923,7 +921,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Text("\u2713 ", color = MaterialTheme.colorScheme.primary)
                                     Text(
-                                        "Mutual \u2014 your partner has you configured. Data should sync.",
+                                        stringResource(R.string.settings_status_mutual),
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -935,7 +933,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Text("\u26a0 ", color = MaterialTheme.colorScheme.error)
                                     Text(
-                                        "Your partner runs Infans but does NOT have you as their partner.",
+                                        stringResource(R.string.settings_status_different_partner),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error
                                     )
@@ -948,7 +946,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 ) {
                                     Text("? ", color = MaterialTheme.colorScheme.tertiary)
                                     Text(
-                                        "No Infans data found. They may not be running Infans, or use different relays.",
+                                        stringResource(R.string.settings_status_no_infans),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -956,7 +954,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             }
                             is PartnerStatus.NoPartner -> {
                                 Text(
-                                    "No partner configured.",
+                                    stringResource(R.string.settings_status_no_partner),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -988,12 +986,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Haptic Feedback",
+                            stringResource(R.string.settings_haptic_feedback),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            "Vibrate on button presses.",
+                            stringResource(R.string.settings_haptic_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1033,12 +1031,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Screenshot Protection",
+                            stringResource(R.string.settings_screenshot_protection),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            "Block screenshots, screen recording, and the recents-screen preview.",
+                            stringResource(R.string.settings_screenshot_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1068,7 +1066,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Reminders ───────────────────────────────────
         item {
-            SectionHeader("Reminders")
+            SectionHeader(stringResource(R.string.settings_reminders))
         }
 
         item {
@@ -1086,17 +1084,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Feeding Reminder",
+                        stringResource(R.string.settings_feeding_reminder),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Get a notification at regular intervals to remind you to feed baby.",
+                        stringResource(R.string.settings_feeding_reminder_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
-                    val intervals = listOf(0 to "Off", 90 to "1.5h", 120 to "2h", 150 to "2.5h", 180 to "3h", 240 to "4h")
+                    val intervals = listOf(0 to stringResource(R.string.settings_interval_off), 90 to "1.5h", 120 to "2h", 150 to "2.5h", 180 to "3h", 240 to "4h")
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         intervals.forEachIndexed { index, (mins, label) ->
                             SegmentedButton(
@@ -1133,13 +1131,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             val count = viewModel.importFromJson(uri)
                             jsonImporting = false
                             if (count >= 0) {
-                                backupMessage = "✓ Imported $count records"
+                                backupMessage = context.getString(R.string.settings_imported_records, count)
                             } else {
-                                backupError = "Import failed: could not read file"
+                                backupError = context.getString(R.string.settings_import_failed_read)
                             }
                         } catch (e: Exception) {
                             jsonImporting = false
-                            backupError = "Import failed: ${e.message}"
+                            backupError = context.getString(R.string.settings_import_failed, e.message ?: "")
                         }
                     }
                 }
@@ -1152,12 +1150,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Backup & Restore",
+                        stringResource(R.string.settings_backup_restore),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Export data for safekeeping or restore after relay failure or accidental deletion. PDF is for reading/printing. JSON backup can be re-imported to fully restore all data.",
+                        stringResource(R.string.settings_backup_restore_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1178,20 +1176,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                             putExtra(Intent.EXTRA_STREAM, uri)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
+                                        context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.settings_share_pdf)))
                                     } else {
-                                        backupError = "No data to export"
+                                        backupError = context.getString(R.string.settings_no_data_to_export)
                                     }
                                 } catch (e: Exception) {
                                     pdfExporting = false
-                                    backupError = "PDF export failed: ${e.message}"
+                                    backupError = context.getString(R.string.settings_pdf_export_failed, e.message ?: "")
                                 }
                             }
                         },
                         enabled = !pdfExporting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (pdfExporting) "Exporting…" else "Export to PDF")
+                        Text(if (pdfExporting) stringResource(R.string.settings_exporting) else stringResource(R.string.settings_export_pdf))
                     }
                     // JSON backup export
                     OutlinedButton(
@@ -1199,7 +1197,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         enabled = !jsonExporting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (jsonExporting) "Exporting…" else "Export JSON Backup")
+                        Text(if (jsonExporting) stringResource(R.string.settings_exporting) else stringResource(R.string.settings_export_json))
                     }
                     // JSON restore
                     OutlinedButton(
@@ -1209,7 +1207,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         enabled = !jsonImporting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (jsonImporting) "Importing…" else "Restore from JSON")
+                        Text(if (jsonImporting) stringResource(R.string.settings_importing) else stringResource(R.string.settings_restore_json))
                     }
                     backupMessage?.let {
                         Text(
@@ -1231,13 +1229,10 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             if (showJsonExportWarning) {
                 AlertDialog(
                     onDismissRequest = { showJsonExportWarning = false },
-                    title = { Text("JSON Backup Is Not Encrypted") },
+                    title = { Text(stringResource(R.string.settings_json_not_encrypted_title)) },
                     text = {
                         Text(
-                            "The JSON backup file contains all your baby tracking data in plain, readable text. " +
-                            "It does NOT include your Nostr private key, but anyone who opens this file can see " +
-                            "your child's name, feeding times, sleep logs, and notes.\n\n" +
-                            "Store it somewhere safe. Do not share it or upload it to a cloud service you don't control."
+                            stringResource(R.string.settings_json_not_encrypted_body)
                         )
                     },
                     confirmButton = {
@@ -1257,20 +1252,20 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                                 putExtra(Intent.EXTRA_STREAM, uri)
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
-                                            context.startActivity(Intent.createChooser(shareIntent, "Save JSON Backup"))
+                                            context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.settings_save_json)))
                                         } else {
-                                            backupError = "No data to export"
+                                            backupError = context.getString(R.string.settings_no_data_to_export)
                                         }
                                     } catch (e: Exception) {
                                         jsonExporting = false
-                                        backupError = "JSON export failed: ${e.message}"
+                                        backupError = context.getString(R.string.settings_json_export_failed, e.message ?: "")
                                     }
                                 }
                             }
-                        ) { Text("Export Anyway") }
+                        ) { Text(stringResource(R.string.settings_export_anyway)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showJsonExportWarning = false }) { Text("Cancel") }
+                        TextButton(onClick = { showJsonExportWarning = false }) { Text(stringResource(R.string.settings_cancel)) }
                     }
                 )
             }
@@ -1289,13 +1284,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Delete Relay Data",
+                        stringResource(R.string.settings_delete_relay_data),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.error
                     )
                     Text(
-                        "Removes all encrypted backups and partner-sync events from Nostr relays. Your local data is not affected. This signs two empty replacement events (one for self-backup, one for partner sync) that overwrite the old data on each relay.",
+                        stringResource(R.string.settings_delete_relay_data_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1309,7 +1304,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (deleting) "Deleting…" else "Delete from Relays")
+                        Text(if (deleting) stringResource(R.string.settings_deleting) else stringResource(R.string.settings_delete_from_relays))
                     }
                     deleteResult?.let {
                         Text(
@@ -1325,8 +1320,8 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             if (showDeleteConfirm) {
                 AlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("Delete Relay Data?") },
-                    text = { Text("This will publish empty replacement events to all connected relays, overwriting your encrypted backups. Your local data stays intact. This action cannot be undone.") },
+                    title = { Text(stringResource(R.string.settings_delete_relay_confirm_title)) },
+                    text = { Text(stringResource(R.string.settings_delete_relay_confirm_body)) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -1336,14 +1331,14 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 scope.launch {
                                     val ok = viewModel.deleteRelayData()
                                     deleting = false
-                                    deleteResult = if (ok) "✓ Relay data deleted"
-                                                   else "Failed to delete — check relay connection"
+                                    deleteResult = if (ok) context.getString(R.string.settings_relay_deleted)
+                                                   else context.getString(R.string.settings_relay_delete_failed)
                                 }
                             }
-                        ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                        ) { Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                        TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.settings_cancel)) }
                     }
                 )
             }
@@ -1360,17 +1355,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Debug Log", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.settings_debug_log), style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "PII-free diagnostic log — no npubs, pubkeys, or personal data",
+                        stringResource(R.string.settings_debug_log_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { showLog = !showLog }) {
-                            Text(if (showLog) "Hide Log" else "Show Log")
+                            Text(if (showLog) stringResource(R.string.settings_hide_log) else stringResource(R.string.settings_show_log))
                         }
                         OutlinedButton(
                             onClick = {
@@ -1384,25 +1379,25 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                             putExtra(Intent.EXTRA_STREAM, it)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
-                                        context.startActivity(Intent.createChooser(shareIntent, "Share Debug Log"))
+                                        context.startActivity(Intent.createChooser(shareIntent, context.getString(R.string.settings_share_debug_log)))
                                     }
                                 }
                             },
                             enabled = !logExporting && logEntries.isNotEmpty()
                         ) {
-                            Text(if (logExporting) "Exporting…" else "Export")
+                            Text(if (logExporting) stringResource(R.string.settings_exporting) else stringResource(R.string.settings_export))
                         }
                         OutlinedButton(
                             onClick = { Dbg.clear() },
                             enabled = logEntries.isNotEmpty()
                         ) {
-                            Text("Clear")
+                            Text(stringResource(R.string.settings_clear))
                         }
                     }
                     if (showLog) {
                         Spacer(Modifier.height(12.dp))
                         if (logEntries.isEmpty()) {
-                            Text("No log entries yet", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.settings_no_log_entries), style = MaterialTheme.typography.bodySmall)
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
@@ -1432,7 +1427,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── App Update ───────────────────────────────────
         item {
-            SectionHeader("App Updates")
+            SectionHeader(stringResource(R.string.settings_app_updates))
         }
 
         item {
@@ -1465,12 +1460,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Auto-Update",
+                        stringResource(R.string.settings_auto_update),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Check GitHub for new versions and install them automatically.",
+                        stringResource(R.string.settings_auto_update_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1480,7 +1475,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Check automatically on launch")
+                        Text(stringResource(R.string.settings_check_auto))
                         Switch(
                             checked = autoUpdate,
                             onCheckedChange = {
@@ -1496,12 +1491,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "Current version",
+                            stringResource(R.string.settings_current_version),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "v${viewModel.currentVersionName}",
+                            stringResource(R.string.settings_version_value, viewModel.currentVersionName),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium
                         )
@@ -1512,12 +1507,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "Latest version",
+                                stringResource(R.string.settings_latest_version),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "v${updateInfo!!.versionName}",
+                                stringResource(R.string.settings_version_value, updateInfo!!.versionName),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
@@ -1528,7 +1523,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     if (updateChecking) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text("Checking for updates...", style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.settings_checking_updates), style = MaterialTheme.typography.bodySmall)
                         }
                     } else if (updateInfo != null) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1539,7 +1534,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                "Update v${updateInfo!!.versionName} available",
+                                stringResource(R.string.settings_update_available, updateInfo!!.versionName),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
@@ -1556,7 +1551,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         )
                     } else {
                         Text(
-                            "Last checked: tap \"Check Now\"",
+                            stringResource(R.string.settings_last_checked),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1566,7 +1561,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         OutlinedButton(
                             onClick = { viewModel.checkForUpdate() },
                             enabled = !updateChecking
-                        ) { Text("Check Now") }
+                        ) { Text(stringResource(R.string.settings_check_now)) }
                         if (updateInfo != null) {
                             Button(
                                 onClick = { showUpdateDialog = true },
@@ -1579,7 +1574,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                         color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 } else {
-                                    Text("Download & Install")
+                                    Text(stringResource(R.string.settings_download_install))
                                 }
                             }
                         }
@@ -1591,7 +1586,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             if (showUpdateDialog && updateInfo != null) {
                 AlertDialog(
                     onDismissRequest = { showUpdateDialog = false },
-                    title = { Text("Update to v${updateInfo!!.versionName}") },
+                    title = { Text(stringResource(R.string.settings_update_to_version, updateInfo!!.versionName)) },
                     text = {
                         Column {
                             Text(updateInfo!!.releaseName)
@@ -1602,7 +1597,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "The APK will be downloaded from GitHub and installed.",
+                                stringResource(R.string.settings_update_dialog_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1614,10 +1609,10 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                                 showUpdateDialog = false
                                 viewModel.downloadAndInstallUpdate()
                             }
-                        ) { Text("Download & Install") }
+                        ) { Text(stringResource(R.string.settings_download_install)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showUpdateDialog = false }) { Text("Later") }
+                        TextButton(onClick = { showUpdateDialog = false }) { Text(stringResource(R.string.settings_later)) }
                     }
                 )
             }
@@ -1625,7 +1620,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Backup ──────────────────────────────────────
         item {
-            SectionHeader("Encrypted Backup")
+            SectionHeader(stringResource(R.string.settings_encrypted_backup))
         }
 
         item {
@@ -1637,7 +1632,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "All data is encrypted (NIP-44) and backed up to Nostr relays as kind 30078 events.",
+                        stringResource(R.string.settings_encrypted_backup_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1645,7 +1640,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     Button(onClick = { viewModel.exportBackup() }) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Backup Now")
+                        Text(stringResource(R.string.settings_backup_now))
                     }
                 }
             }
@@ -1653,7 +1648,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
 
         // ─── Children ────────────────────────────────────
         item {
-            SectionHeader("Children")
+            SectionHeader(stringResource(R.string.settings_children))
         }
 
         items(children) { child ->
@@ -1672,21 +1667,21 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         Text(child.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                         if (child.dob != null) {
                             Text(
-                                "DOB: ${dateFmt.format(Date(child.dob))}",
+                                stringResource(R.string.settings_dob, dateFmt.format(Date(child.dob))),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         if (child.gender != null) {
                             Text(
-                                "Gender: ${child.gender}",
+                                stringResource(R.string.settings_gender, child.gender ?: ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                     TextButton(onClick = { viewModel.deleteChild(child) }) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -1699,13 +1694,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Add Child")
+                Text(stringResource(R.string.settings_add_child))
             }
         }
 
         // ─── Help ─────────────────────────────────────────
         item {
-            SectionHeader("Help")
+            SectionHeader(stringResource(R.string.settings_help))
         }
 
         item {
@@ -1717,12 +1712,12 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Setup Wizard",
+                        stringResource(R.string.settings_setup_wizard),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Replay the onboarding tutorial if you missed a step or want to review the setup options.",
+                        stringResource(R.string.settings_setup_wizard_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1733,7 +1728,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                     ) {
                         Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Show Setup Wizard")
+                        Text(stringResource(R.string.settings_show_setup_wizard))
                     }
                 }
             }
@@ -1742,7 +1737,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
         // ─── About ────────────────────────────────────────
         item {
             Spacer(Modifier.height(16.dp))
-            SectionHeader("About")
+            SectionHeader(stringResource(R.string.settings_about))
         }
 
         item {
@@ -1763,31 +1758,31 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "Version",
+                            stringResource(R.string.settings_version),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            "v${viewModel.currentVersionName}",
+                            stringResource(R.string.settings_version_value, viewModel.currentVersionName),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
-                        "A privacy-first baby tracking app with Nostr-based encrypted backup and parent-to-parent sync.",
+                        stringResource(R.string.settings_about_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Your data stays on your device. Backups are end-to-end encrypted. No accounts, no tracking, no cloud.",
+                        stringResource(R.string.settings_about_privacy),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Built with Kotlin, Jetpack Compose, and Material 3.",
+                        stringResource(R.string.settings_about_built_with),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1811,17 +1806,17 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
     if (showImportKey) {
         AlertDialog(
             onDismissRequest = { showImportKey = false; error = null },
-            title = { Text("Import Nostr Identity") },
+            title = { Text(stringResource(R.string.settings_import_identity_title)) },
             text = {
                 Column {
-                    Text("Paste your nsec (private key):", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_paste_nsec), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = nsecInput,
                         onValueChange = { nsecInput = it },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        placeholder = { Text("nsec1...") }
+                        placeholder = { Text(stringResource(R.string.settings_nsec_placeholder)) }
                     )
                     if (error != null) {
                         Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -1837,13 +1832,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                             nsecInput = ""
                             error = null
                         } else {
-                            error = "Invalid nsec"
+                            error = context.getString(R.string.settings_invalid_nsec)
                         }
                     }
-                }) { Text("Import") }
+                }) { Text(stringResource(R.string.settings_import)) }
             },
             dismissButton = {
-                TextButton(onClick = { showImportKey = false; error = null }) { Text("Cancel") }
+                TextButton(onClick = { showImportKey = false; error = null }) { Text(stringResource(R.string.settings_cancel)) }
             }
         )
     }
@@ -1861,7 +1856,7 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
                         partnerNpubInput = ""
                         viewModel.exportBackup()
                     } else {
-                        partnerError = "Could not resolve scanned QR — check with partner"
+                        partnerError = context.getString(R.string.settings_partner_error_qr)
                     }
                 }
             },
@@ -1877,13 +1872,13 @@ fun SettingsScreen(viewModel: BabyViewModel, nostrManager: NostrManager, onRepla
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showMyQr = false },
             confirmButton = {
-                TextButton(onClick = { showMyQr = false }) { Text("Close") }
+                TextButton(onClick = { showMyQr = false }) { Text(stringResource(R.string.settings_close)) }
             },
-            title = { Text("Your QR Code") },
+            title = { Text(stringResource(R.string.settings_your_qr)) },
             text = {
                 com.turkbot.babytracker.ui.components.QrCodeDisplay(
                     content = identity,
-                    caption = "Have the other parent scan this to link."
+                    caption = stringResource(R.string.settings_qr_caption)
                 )
             }
         )
@@ -1912,20 +1907,20 @@ private fun AddChildDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Child") },
+        title = { Text(stringResource(R.string.settings_add_child)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.settings_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = dob,
                     onValueChange = { dob = it },
-                    label = { Text("Date of Birth (YYYY-MM-DD)") },
+                    label = { Text(stringResource(R.string.settings_dob_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1933,12 +1928,12 @@ private fun AddChildDialog(
                     FilterChip(
                         selected = gender == "boy",
                         onClick = { gender = if (gender == "boy") "" else "boy" },
-                        label = { Text("Boy") }
+                        label = { Text(stringResource(R.string.settings_boy)) }
                     )
                     FilterChip(
                         selected = gender == "girl",
                         onClick = { gender = if (gender == "girl") "" else "girl" },
-                        label = { Text("Girl") }
+                        label = { Text(stringResource(R.string.settings_girl)) }
                     )
                 }
             }
@@ -1954,10 +1949,10 @@ private fun AddChildDialog(
                     } else null
                     onAdd(name.trim(), dobMs, gender.ifBlank { null })
                 }
-            ) { Text("Add") }
+            ) { Text(stringResource(R.string.settings_add)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
         }
     )
 }

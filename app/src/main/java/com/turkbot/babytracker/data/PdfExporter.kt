@@ -17,6 +17,7 @@ import android.content.Intent
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
 import com.turkbot.babytracker.util.UnitPreferences
@@ -100,9 +101,9 @@ class PdfExporter(
         newPage()
 
         // ── Title ──────────────────────────────────────
-        drawText("Infans — Baby Tracker Export", titlePaint)
+        drawText(context.getString(R.string.pdf_title), titlePaint)
         y += 6
-        drawText("Generated ${dateFmt.format(Date())}", mutedPaint)
+        drawText(context.getString(R.string.pdf_generated, dateFmt.format(Date())), mutedPaint)
         y += 18
 
         // ── Per-child sections ─────────────────────────
@@ -111,9 +112,12 @@ class PdfExporter(
             checkSpace(60f)
             drawLine()
             y += 6
-            drawText("Child: ${child.name}", headingPaint)
-            val dob = child.dob?.let { "Born ${dateFmt.format(Date(it))}" } ?: "DOB not set"
-            val gender = child.gender?.replaceFirstChar { it.uppercase() } ?: "Gender not set"
+            drawText(context.getString(R.string.pdf_child, child.name), headingPaint)
+            val dob = child.dob?.let {
+                context.getString(R.string.pdf_born, dateFmt.format(Date(it)))
+            } ?: context.getString(R.string.pdf_dob_not_set)
+            val gender = child.gender?.replaceFirstChar { it.uppercase() }
+                ?: context.getString(R.string.pdf_gender_not_set)
             drawText("$dob  •  $gender", mutedPaint)
             y += 12
 
@@ -127,17 +131,24 @@ class PdfExporter(
 
             // Feedings
             if (childFeedings.isNotEmpty()) {
-                drawSection("Feedings (${childFeedings.size})")
+                drawSection(context.getString(R.string.pdf_section_feedings, childFeedings.size))
                 childFeedings.forEach { f ->
                     val time = timeFmt.format(Date(f.time))
                     val detail = when (f.type) {
-                        "bottle" -> "Bottle — ${fmtAmount(f.amount, f.unit)}"
+                        "bottle" -> context.getString(R.string.pdf_bottle_detail, fmtAmount(f.amount, f.unit))
                         "breast" -> {
-                            val side = f.breastSide?.replaceFirstChar { it.uppercase() } ?: "?"
-                            val dur = f.duration?.let { ", $it min" } ?: ""
-                            "Breast ($side$dur)"
+                            val side = when (f.breastSide) {
+                                "left" -> context.getString(R.string.side_left)
+                                "right" -> context.getString(R.string.side_right)
+                                "both" -> context.getString(R.string.side_both)
+                                else -> "?"
+                            }
+                            val dur = f.duration?.let {
+                                context.getString(R.string.pdf_duration_suffix, it)
+                            } ?: ""
+                            context.getString(R.string.pdf_breast_detail, side, dur)
                         }
-                        "solids" -> "Solids — ${fmtAmount(f.amount, f.unit)}"
+                        "solids" -> context.getString(R.string.pdf_solids_detail, fmtAmount(f.amount, f.unit))
                         else -> f.type
                     }
                     val note = f.note?.let { "  •  $it" } ?: ""
@@ -147,11 +158,12 @@ class PdfExporter(
 
             // Sleeps
             if (childSleeps.isNotEmpty()) {
-                drawSection("Sleep (${childSleeps.size})")
+                drawSection(context.getString(R.string.pdf_section_sleep, childSleeps.size))
                 childSleeps.forEach { s ->
                     val time = timeFmt.format(Date(s.start))
                     val hrs = s.duration / 60.0
-                    val dur = if (hrs >= 1) String.format("%.1f hrs", hrs) else "${s.duration} min"
+                    val dur = if (hrs >= 1) context.getString(R.string.pdf_hours, String.format("%.1f", hrs))
+                              else context.getString(R.string.pdf_minutes, s.duration)
                     val note = s.note?.let { "  •  $it" } ?: ""
                     drawRow(time, "$dur$note")
                 }
@@ -159,7 +171,7 @@ class PdfExporter(
 
             // Diapers
             if (childDiapers.isNotEmpty()) {
-                drawSection("Diapers (${childDiapers.size})")
+                drawSection(context.getString(R.string.pdf_section_diapers, childDiapers.size))
                 childDiapers.forEach { d ->
                     val time = timeFmt.format(Date(d.time))
                     val contents = d.contents.replaceFirstChar { it.uppercase() }
@@ -171,24 +183,24 @@ class PdfExporter(
 
             // Weights
             if (childWeights.isNotEmpty()) {
-                drawSection("Weight & Measurements (${childWeights.size})")
+                drawSection(context.getString(R.string.pdf_section_weight, childWeights.size))
                 childWeights.forEach { w ->
                     val date = dateFmt.format(Date(w.date))
                     val parts = mutableListOf<String>()
                     parts.add("${fmtWeight(w.value, w.unit)}")
                     w.height?.let { parts.add("${fmtHeight(it, w.heightUnit)}") }
-                    w.headCirc?.let { parts.add("Head ${fmtHeight(it, w.headCircUnit)}") }
+                    w.headCirc?.let { parts.add(context.getString(R.string.pdf_head, fmtHeight(it, w.headCircUnit))) }
                     drawRow(date, parts.joinToString("  •  "))
                 }
             }
 
             // Pumping
             if (childPumpings.isNotEmpty()) {
-                drawSection("Pumping (${childPumpings.size})")
+                drawSection(context.getString(R.string.pdf_section_pumping, childPumpings.size))
                 childPumpings.forEach { p ->
                     val time = timeFmt.format(Date(p.time))
                     val amt = fmtAmount(p.amount, p.unit)
-                    val dur = p.duration?.let { ", $it min" } ?: ""
+                    val dur = p.duration?.let { context.getString(R.string.pdf_duration_suffix, it) } ?: ""
                     val side = p.side?.let { ", ${it.replaceFirstChar { c -> c.uppercase() }}" } ?: ""
                     val note = p.note?.let { "  •  $it" } ?: ""
                     drawRow(time, "$amt$dur$side$note")
@@ -197,7 +209,7 @@ class PdfExporter(
 
             // Health
             if (childHealth.isNotEmpty()) {
-                drawSection("Health (${childHealth.size})")
+                drawSection(context.getString(R.string.pdf_section_health, childHealth.size))
                 childHealth.forEach { h ->
                     val time = timeFmt.format(Date(h.time))
                     val parts = mutableListOf<String>()
@@ -210,7 +222,7 @@ class PdfExporter(
 
             // Milestones
             if (childMilestones.isNotEmpty()) {
-                drawSection("Milestones (${childMilestones.size})")
+                drawSection(context.getString(R.string.pdf_section_milestones, childMilestones.size))
                 childMilestones.forEach { m ->
                     val date = dateFmt.format(Date(m.date))
                     val note = m.note?.let { "  •  $it" } ?: ""
@@ -225,10 +237,12 @@ class PdfExporter(
         checkSpace(40f)
         drawLine()
         y += 6
-        drawText("Exported from Infans — ${children.size} child(ren), " +
-                "${feedings.size} feedings, ${sleeps.size} sleeps, ${diapers.size} diapers, " +
-                "${weights.size} measurements, ${pumpings.size} pumpings, " +
-                "${healthRecords.size} health records, ${milestones.size} milestones.",
+        drawText(
+            context.getString(
+                R.string.pdf_footer,
+                children.size, feedings.size, sleeps.size, diapers.size,
+                weights.size, pumpings.size, healthRecords.size, milestones.size
+            ),
             mutedPaint)
 
         // Finalize
@@ -322,28 +336,28 @@ class PdfExporter(
     private fun fmtAmount(amount: Double?, unit: String?): String {
         if (amount == null) return ""
         return when (unit) {
-            "ml" -> "${amount.toInt()} ml"
-            "fl_oz" -> String.format("%.1f fl oz", amount)
-            "min" -> "${amount.toInt()} min"
-            "g" -> "${amount.toInt()} g"
-            "oz" -> "${amount.toInt()} oz"
+            "ml" -> "${amount.toInt()} ${context.getString(R.string.units_ml)}"
+            "fl_oz" -> "${String.format("%.1f", amount)} ${context.getString(R.string.units_fl_oz)}"
+            "min" -> "${amount.toInt()} ${context.getString(R.string.units_min)}"
+            "g" -> "${amount.toInt()} ${context.getString(R.string.units_g)}"
+            "oz" -> "${amount.toInt()} ${context.getString(R.string.units_oz)}"
             else -> "$amount $unit"
         }
     }
 
     private fun fmtWeight(value: Double, unit: String): String {
         return when (unit) {
-            "kg" -> String.format("%.2f kg", value)
-            "lb" -> String.format("%.1f lb", value)
-            "oz" -> String.format("%.0f oz", value)
+            "kg" -> "${String.format("%.2f", value)} ${context.getString(R.string.units_kg)}"
+            "lb" -> "${String.format("%.1f", value)} ${context.getString(R.string.units_lb)}"
+            "oz" -> "${String.format("%.0f", value)} ${context.getString(R.string.units_oz)}"
             else -> "$value $unit"
         }
     }
 
     private fun fmtHeight(value: Double, unit: String?): String {
         return when (unit) {
-            "cm" -> String.format("%.1f cm", value)
-            "in" -> String.format("%.1f in", value)
+            "cm" -> "${String.format("%.1f", value)} ${context.getString(R.string.units_cm)}"
+            "in" -> "${String.format("%.1f", value)} ${context.getString(R.string.units_in)}"
             else -> "$value $unit"
         }
     }

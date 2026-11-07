@@ -16,6 +16,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.turkbot.babytracker.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -109,7 +110,9 @@ class AppUpdater(
             }
 
             if (body.isNullOrBlank()) {
-                return@withContext CheckResult.Error("Server returned HTTP ${response.code}")
+                return@withContext CheckResult.Error(
+                    context.getString(R.string.update_error_http, response.code)
+                )
             }
             response.close()
 
@@ -151,7 +154,10 @@ class AppUpdater(
                         CheckResult.UpdateAvailable(
                             UpdateInfo(
                                 versionName = versionName,
-                                releaseName = release.optString("name", "Infans v$versionName"),
+                                releaseName = release.optString(
+                                    "name",
+                                    context.getString(R.string.update_release_name_fallback, versionName)
+                                ),
                                 downloadUrl = downloadUrl,
                                 releaseNotes = release.optString("body", ""),
                                 fileSize = asset.optLong("size", 0)
@@ -164,13 +170,13 @@ class AppUpdater(
             }
             CheckResult.UpToDate
         } catch (e: java.net.UnknownHostException) {
-            CheckResult.Error("Cannot reach GitHub (no network)")
+            CheckResult.Error(context.getString(R.string.update_error_no_network))
         } catch (e: java.net.SocketTimeoutException) {
-            CheckResult.Error("Connection timed out — check your network")
+            CheckResult.Error(context.getString(R.string.update_error_timeout))
         } catch (e: java.net.ConnectException) {
-            CheckResult.Error("Cannot connect to update server")
+            CheckResult.Error(context.getString(R.string.update_error_connect))
         } catch (e: Exception) {
-            CheckResult.Error("Update check failed: ${e.message}")
+            CheckResult.Error(context.getString(R.string.update_error_check_failed, e.message ?: ""))
         }
     }
 

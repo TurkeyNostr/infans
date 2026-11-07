@@ -29,7 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.HealthRecord
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.UnitPreferences
@@ -73,13 +75,13 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Health") },
+                text = { Text(stringResource(R.string.health_tab_health)) },
                 icon = { Icon(Icons.Default.HealthAndSafety, contentDescription = null) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Vaccines") },
+                text = { Text(stringResource(R.string.health_tab_vaccines)) },
                 icon = { Icon(Icons.Default.Vaccines, contentDescription = null) }
             )
         }
@@ -103,7 +105,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Health Record",
+                        stringResource(R.string.health_log_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -114,7 +116,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                             temperatureText = it.filter { c -> c.isDigit() || c == '.' }
                             showError = false
                         },
-                        label = { Text("Temperature") },
+                        label = { Text(stringResource(R.string.health_temperature)) },
                         suffix = { Text(if (tempUnit == "F") "°F" else "°C") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -136,7 +138,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                             medicationText = it
                             showError = false
                         },
-                        label = { Text("Medication (optional)") },
+                        label = { Text(stringResource(R.string.health_medication)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -144,7 +146,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     OutlinedTextField(
                         value = doseText,
                         onValueChange = { doseText = it },
-                        label = { Text("Dose (optional)") },
+                        label = { Text(stringResource(R.string.health_dose)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -152,14 +154,14 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.health_note)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     if (showError) {
                         Text(
-                            "Enter at least a temperature or medication",
+                            stringResource(R.string.health_error_required),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.padding(bottom = 4.dp)
@@ -193,7 +195,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     ) {
                         Icon(Icons.Default.HealthAndSafety, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Record")
+                        Text(stringResource(R.string.health_log_button))
                     }
                 }
             }
@@ -202,7 +204,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
         // ── Today's records header ─────────────────────────
         item {
             Text(
-                "Today",
+                stringResource(R.string.health_today),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 4.dp)
@@ -218,7 +220,7 @@ fun HealthScreen(viewModel: BabyViewModel, onSaved: () -> Unit = {}) {
                     )
                 ) {
                     Text(
-                        "No health records logged today",
+                        stringResource(R.string.health_no_records_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -325,14 +327,14 @@ private fun HealthRecordCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.health_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.health_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

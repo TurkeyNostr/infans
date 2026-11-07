@@ -22,16 +22,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.Feeding
 import com.turkbot.babytracker.util.Units
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-private val BOTTLE_UNITS = listOf("ml" to "ml", "fl_oz" to "fl oz")
-private val SOLID_UNITS = listOf("g" to "g", "oz" to "oz")
+// Unit tokens (first element) are data-layer identifiers stored in the DB;
+// the display label is resolved from resources at composition time.
+private val BOTTLE_UNITS = listOf("ml" to R.string.units_ml, "fl_oz" to R.string.units_fl_oz)
+private val SOLID_UNITS = listOf("g" to R.string.units_g, "oz" to R.string.units_oz)
 private val BREAST_SIDES = listOf("left", "right", "both")
+
+/** Localized label for a breast side token ("left"/"right"/"both"). */
+@Composable
+private fun breastSideLabel(side: String): String = when (side) {
+    "left" -> stringResource(R.string.side_left)
+    "right" -> stringResource(R.string.side_right)
+    else -> stringResource(R.string.side_both)
+}
 
 /**
  * Edit dialog for a feeding entry. Allows editing the quantity fields
@@ -69,7 +81,7 @@ fun EditFeedingDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    "Edit ${Units.feedTypeLabel(feeding.type)}",
+                    stringResource(R.string.edit_feeding_title, Units.feedTypeLabel(feeding.type)),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -85,7 +97,7 @@ fun EditFeedingDialog(
                             OutlinedTextField(
                                 value = amountText,
                                 onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                                label = { Text("Amount") },
+                                label = { Text(stringResource(R.string.edit_feeding_amount)) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
@@ -96,7 +108,7 @@ fun EditFeedingDialog(
                                         selected = selectedUnit == unit,
                                         onClick = { selectedUnit = unit },
                                         shape = SegmentedButtonDefaults.itemShape(i, BOTTLE_UNITS.size)
-                                    ) { Text(label) }
+                                    ) { Text(stringResource(label)) }
                                 }
                             }
                         }
@@ -109,14 +121,14 @@ fun EditFeedingDialog(
                                     onClick = { selectedSide = side },
                                     shape = SegmentedButtonDefaults.itemShape(index, BREAST_SIDES.size)
                                 ) {
-                                    Text(side.replaceFirstChar { it.uppercase() })
+                                    Text(breastSideLabel(side))
                                 }
                             }
                         }
                         OutlinedTextField(
                             value = durationText,
                             onValueChange = { durationText = it.filter { c -> c.isDigit() } },
-                            label = { Text("Duration (minutes)") },
+                            label = { Text(stringResource(R.string.edit_feeding_duration)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth()
@@ -131,7 +143,7 @@ fun EditFeedingDialog(
                             OutlinedTextField(
                                 value = amountText,
                                 onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                                label = { Text("Amount") },
+                                label = { Text(stringResource(R.string.edit_feeding_amount)) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
@@ -142,7 +154,7 @@ fun EditFeedingDialog(
                                         selected = selectedUnit == unit,
                                         onClick = { selectedUnit = unit },
                                         shape = SegmentedButtonDefaults.itemShape(i, SOLID_UNITS.size)
-                                    ) { Text(label) }
+                                    ) { Text(stringResource(label)) }
                                 }
                             }
                         }
@@ -152,7 +164,7 @@ fun EditFeedingDialog(
                 OutlinedTextField(
                     value = noteText,
                     onValueChange = { noteText = it },
-                    label = { Text("Note (optional)") },
+                    label = { Text(stringResource(R.string.edit_feeding_note_optional)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -164,7 +176,7 @@ fun EditFeedingDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.edit_feeding_cancel))
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = {
@@ -183,7 +195,7 @@ fun EditFeedingDialog(
                             noteText.ifBlank { null }
                         )
                     }) {
-                        Text("Save")
+                        Text(stringResource(R.string.edit_feeding_save))
                     }
                 }
             }

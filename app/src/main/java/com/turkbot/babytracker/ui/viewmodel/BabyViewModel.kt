@@ -16,6 +16,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.*
 import com.turkbot.babytracker.BabyTrackerApp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.PdfExporter
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.data.repo.BabyRepository
@@ -578,7 +579,7 @@ class BabyViewModel(
                 }
                 is AppUpdater.CheckResult.UpToDate -> {
                     _updateInfo.value = null
-                    _updateMessage.value = "You're up to date! (v$currentVersionName)"
+                    _updateMessage.value = app.getString(R.string.update_up_to_date, currentVersionName)
                 }
                 is AppUpdater.CheckResult.Error -> {
                     _updateInfo.value = null
@@ -593,14 +594,14 @@ class BabyViewModel(
         val info = _updateInfo.value ?: return
         viewModelScope.launch {
             _updateDownloading.value = true
-            _updateMessage.value = "Downloading v${info.versionName}..."
+            _updateMessage.value = app.getString(R.string.update_downloading, info.versionName)
             val apkFile = updater.downloadApk(info)
             _updateDownloading.value = false
             if (apkFile != null) {
-                _updateMessage.value = "Installing v${info.versionName}..."
+                _updateMessage.value = app.getString(R.string.update_installing, info.versionName)
                 updater.installApk(apkFile)
             } else {
-                _updateMessage.value = "Download failed — check your network connection"
+                _updateMessage.value = app.getString(R.string.update_download_failed)
             }
         }
     }

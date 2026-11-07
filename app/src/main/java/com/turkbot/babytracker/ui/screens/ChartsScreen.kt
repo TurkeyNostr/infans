@@ -31,7 +31,9 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.ui.components.BarChart
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -76,6 +78,35 @@ private enum class Metric(val label: String, val unit: String) {
     HEALTH("Health Records", "count")
 }
 
+@Composable
+private fun periodLabel(period: Period): String = when (period) {
+    Period.DAILY -> stringResource(R.string.charts_period_daily)
+    Period.WEEKLY -> stringResource(R.string.charts_period_weekly)
+    Period.MONTHLY -> stringResource(R.string.charts_period_monthly)
+    else -> stringResource(R.string.charts_period_yearly)
+}
+
+@Composable
+private fun metricLabel(metric: Metric): String = when (metric) {
+    Metric.FEEDINGS -> stringResource(R.string.charts_metric_feedings)
+    Metric.SLEEP -> stringResource(R.string.charts_metric_sleep)
+    Metric.DIAPERS -> stringResource(R.string.charts_metric_diapers)
+    Metric.BATHS -> stringResource(R.string.charts_metric_baths)
+    Metric.PUMPING -> stringResource(R.string.charts_metric_pumping)
+    Metric.WEIGHT -> stringResource(R.string.charts_metric_weight)
+    Metric.MILESTONES -> stringResource(R.string.charts_metric_milestones)
+    else -> stringResource(R.string.charts_metric_health)
+}
+
+@Composable
+private fun metricUnitLabel(metric: Metric): String = when (metric.unit) {
+    "count" -> stringResource(R.string.charts_unit_count)
+    "hours" -> stringResource(R.string.charts_unit_hours)
+    "ml" -> stringResource(R.string.charts_unit_ml)
+    else -> stringResource(R.string.charts_unit_kg)
+}
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChartsScreen(viewModel: BabyViewModel) {
@@ -100,12 +131,12 @@ fun ChartsScreen(viewModel: BabyViewModel) {
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Growth") }
+                text = { Text(stringResource(R.string.charts_tab_growth)) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Activity") }
+                text = { Text(stringResource(R.string.charts_tab_activity)) }
             )
         }
 
@@ -152,7 +183,7 @@ private fun GrowthTab(weights: List<Weight>, activeChild: Child?) {
             .padding(16.dp)
     ) {
         Text(
-            text = "Weight-for-age",
+            text = stringResource(R.string.charts_weight_for_age),
             style = MaterialTheme.typography.titleLarge
         )
         if (activeChild != null) {
@@ -192,11 +223,11 @@ private fun GrowthTab(weights: List<Weight>, activeChild: Child?) {
             ) {
                 Text(
                     text = if (dob == null && gender == null)
-                        "Set date of birth and gender to see WHO growth chart."
+                        stringResource(R.string.charts_set_dob_and_gender)
                     else if (dob == null)
-                        "Set date of birth to see WHO growth chart."
+                        stringResource(R.string.charts_set_dob)
                     else
-                        "Set gender to see WHO growth chart.",
+                        stringResource(R.string.charts_set_gender),
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
@@ -209,6 +240,7 @@ private fun GrowthTab(weights: List<Weight>, activeChild: Child?) {
                 gender = gender,
                 unit = unit,
                 colors = chartColors,
+                xAxisLabel = stringResource(R.string.charts_axis_age_months),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(280.dp)
@@ -227,10 +259,10 @@ private fun GrowthTab(weights: List<Weight>, activeChild: Child?) {
             val latest = weights.maxByOrNull { it.date }!!
             val ageMo = Units.ageInMonths(dob, latest.date)
             val display = Units.fromKg(latest.value, unit)
-            val ageStr = if (ageMo < 1) "${(ageMo * 30.4375).toInt()}d"
-                         else "${"%.1f".format(ageMo)} mo"
+            val ageStr = if (ageMo < 1) stringResource(R.string.charts_age_days, (ageMo * 30.4375).toInt())
+                         else stringResource(R.string.charts_age_months, "%.1f".format(ageMo))
             Text(
-                text = "Latest: $display at $ageStr",
+                text = stringResource(R.string.charts_latest_value, display, ageStr),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -261,7 +293,7 @@ private fun ActivityTab(
         // ── Period selector ─────────────────────────────
         item {
             Text(
-                "Activity Trends",
+                stringResource(R.string.charts_activity_trends),
                 style = MaterialTheme.typography.titleLarge
             )
             Spacer(Modifier.height(8.dp))
@@ -273,7 +305,7 @@ private fun ActivityTab(
                     FilterChip(
                         selected = selectedPeriod == period,
                         onClick = { selectedPeriod = period },
-                        label = { Text(period.label) }
+                        label = { Text(periodLabel(period)) }
                     )
                 }
             }
@@ -289,7 +321,7 @@ private fun ActivityTab(
                     FilterChip(
                         selected = selectedMetric == metric,
                         onClick = { selectedMetric = metric },
-                        label = { Text(metric.label) }
+                        label = { Text(metricLabel(metric)) }
                     )
                 }
             }
@@ -335,12 +367,12 @@ private fun ActivityTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "${selectedMetric.label} — ${selectedPeriod.label}",
+                        stringResource(R.string.charts_metric_period_title, metricLabel(selectedMetric), periodLabel(selectedPeriod)),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        selectedMetric.unit,
+                        metricUnitLabel(selectedMetric),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -351,7 +383,7 @@ private fun ActivityTab(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "No ${selectedMetric.label.lowercase()} recorded in this period",
+                                stringResource(R.string.charts_no_metric_recorded, metricLabel(selectedMetric).lowercase()),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -513,10 +545,10 @@ private fun LegendRow(colors: ChartColors) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LegendSwatch(color = colors.band, label = "P3–P97")
-        LegendDashedLine(color = colors.p50, label = "P50")
-        LegendDottedLine(color = colors.p3p97, label = "P3/P97")
-        LegendSwatch(color = colors.babyDot, label = "Baby")
+        LegendSwatch(color = colors.band, label = stringResource(R.string.charts_legend_p3_p97_band))
+        LegendDashedLine(color = colors.p50, label = stringResource(R.string.charts_legend_p50))
+        LegendDottedLine(color = colors.p3p97, label = stringResource(R.string.charts_legend_p3_p97_lines))
+        LegendSwatch(color = colors.babyDot, label = stringResource(R.string.charts_legend_baby))
     }
 }
 
@@ -576,6 +608,7 @@ private fun GrowthChart(
     gender: String,
     unit: String,
     colors: ChartColors,
+    xAxisLabel: String,
     modifier: Modifier = Modifier
 ) {
     val textMeasurer = rememberTextMeasurer()
@@ -604,6 +637,7 @@ private fun GrowthChart(
             yMin = yMin,
             unit = unit,
             colors = colors,
+            xAxisLabel = xAxisLabel,
             textMeasurer = textMeasurer
         )
     }
@@ -653,6 +687,7 @@ private fun DrawScope.drawGrowthChart(
     yMin: Double,
     unit: String,
     colors: ChartColors,
+    xAxisLabel: String,
     textMeasurer: TextMeasurer
 ) {
     if (size.width <= 0f || size.height <= 0f) return
@@ -726,7 +761,7 @@ private fun DrawScope.drawGrowthChart(
     }
 
     val xTitle = textMeasurer.measure(
-        buildAnnotatedString { append("Age (months)") },
+        buildAnnotatedString { append(xAxisLabel) },
         style = TextStyle(fontSize = 9.sp, color = colors.axis)
     )
     drawText(

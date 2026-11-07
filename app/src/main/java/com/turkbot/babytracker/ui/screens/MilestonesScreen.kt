@@ -25,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.Milestone
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -64,7 +66,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Record Milestone",
+                        stringResource(R.string.milestones_record),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -72,14 +74,14 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Milestone title") },
+                        label = { Text(stringResource(R.string.milestones_title_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.milestones_note_label)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(
@@ -96,7 +98,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
                     ) {
                         Icon(Icons.Default.EmojiEvents, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Record Milestone")
+                        Text(stringResource(R.string.milestones_record))
                     }
                 }
             }
@@ -112,7 +114,7 @@ fun MilestonesScreen(viewModel: BabyViewModel) {
                     )
                 ) {
                     Text(
-                        "No milestones recorded yet.",
+                        stringResource(R.string.milestones_empty),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -200,14 +202,14 @@ private fun MilestoneCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit date",
+                        contentDescription = stringResource(R.string.milestones_edit_date_cd),
                         tint = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete milestone",
+                        contentDescription = stringResource(R.string.milestones_delete_cd),
                         tint = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }

@@ -25,8 +25,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.util.QrCodeGenerator
 
 /**
@@ -53,12 +55,12 @@ fun QrCodeDisplay(
         if (bitmap != null) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "QR code for $content",
+                contentDescription = stringResource(R.string.qr_content_desc, content),
                 modifier = Modifier.size(size.dp)
             )
         } else {
             Text(
-                "Could not generate QR code",
+                stringResource(R.string.qr_generate_error),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )

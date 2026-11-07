@@ -28,7 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Weight
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
 import com.turkbot.babytracker.util.Units
@@ -74,7 +76,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Measurement",
+                        stringResource(R.string.weight_log_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -83,7 +85,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = weightInput,
                         onValueChange = { weightInput = it },
-                        label = { Text("Weight") },
+                        label = { Text(stringResource(R.string.weight_label)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
@@ -102,7 +104,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = heightInput,
                         onValueChange = { heightInput = it },
-                        label = { Text("Height (optional)") },
+                        label = { Text(stringResource(R.string.weight_height_optional)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
@@ -121,7 +123,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = headCircInput,
                         onValueChange = { headCircInput = it },
-                        label = { Text("Head Circ. (optional)") },
+                        label = { Text(stringResource(R.string.weight_head_circ_optional)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
@@ -161,7 +163,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     ) {
                         Icon(Icons.Default.MonitorWeight, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Save Measurement")
+                        Text(stringResource(R.string.weight_save))
                     }
                 }
             }
@@ -177,7 +179,7 @@ fun WeightScreen(viewModel: BabyViewModel) {
                     )
                 ) {
                     Text(
-                        "No weight measurements recorded yet.",
+                        stringResource(R.string.weight_no_records),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -253,14 +255,14 @@ private fun WeightCard(
                 )
                 if (weight.height != null && weight.heightUnit != null) {
                     Text(
-                        "Height: ${Units.fmtHeight(weight.height, weight.heightUnit)}",
+                        stringResource(R.string.weight_height_value, Units.fmtHeight(weight.height, weight.heightUnit)),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
                 if (weight.headCirc != null && weight.headCircUnit != null) {
                     Text(
-                        "Head: ${Units.fmtHeight(weight.headCirc, weight.headCircUnit)}",
+                        stringResource(R.string.weight_head_value, Units.fmtHeight(weight.headCirc, weight.headCircUnit)),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 2.dp)
                     )
@@ -270,14 +272,14 @@ private fun WeightCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit date",
+                        contentDescription = stringResource(R.string.weight_edit_date),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete weight measurement",
+                        contentDescription = stringResource(R.string.weight_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

@@ -29,7 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.turkbot.babytracker.data.entities.Feeding
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.ui.components.EditFeedingDialog
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
 import com.turkbot.babytracker.ui.components.LiveTimer
@@ -42,12 +44,27 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private val FEED_TYPES = listOf("bottle" to "Bottle", "breast" to "Breast", "solids" to "Solids")
+private val FEED_TYPES = listOf("bottle", "breast", "solids")
 private val BOTTLE_UNITS = listOf("ml" to "ml", "fl_oz" to "fl oz")
 private val SOLID_UNITS = listOf("g" to "g", "oz" to "oz")
 private val BREAST_SIDES = listOf("left", "right", "both")
 
 @OptIn(ExperimentalMaterial3Api::class)
+
+@Composable
+private fun feedTypeLabel(type: String): String = when (type) {
+    "bottle" -> stringResource(R.string.feed_type_bottle)
+    "breast" -> stringResource(R.string.feed_type_breast)
+    else -> stringResource(R.string.feed_type_solids)
+}
+
+@Composable
+private fun feedSideLabel(side: String): String = when (side) {
+    "left" -> stringResource(R.string.feed_side_left)
+    "right" -> stringResource(R.string.feed_side_right)
+    else -> stringResource(R.string.feed_side_both)
+}
+
 @Composable
 fun FeedScreen(viewModel: BabyViewModel) {
     val feedings by viewModel.feedings.collectAsState()
@@ -105,14 +122,14 @@ fun FeedScreen(viewModel: BabyViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Log Feeding",
+                        stringResource(R.string.feed_log_feeding),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
 
                     // Segmented button for feed type
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        FEED_TYPES.forEachIndexed { index, (type, label) ->
+                        FEED_TYPES.forEachIndexed { index, type ->
                             SegmentedButton(
                                 selected = selectedType == type,
                                 onClick = {
@@ -122,7 +139,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(index, FEED_TYPES.size)
                             ) {
-                                Text(label)
+                                Text(feedTypeLabel(type))
                             }
                         }
                     }
@@ -138,7 +155,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 OutlinedTextField(
                                     value = amountText,
                                     onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                                    label = { Text("Amount") },
+                                    label = { Text(stringResource(R.string.feed_amount)) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier.weight(1f)
@@ -163,13 +180,14 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                         onClick = { selectedSide = side },
                                         shape = SegmentedButtonDefaults.itemShape(index, BREAST_SIDES.size)
                                     ) {
-                                        Text(side.replaceFirstChar { it.uppercase() })
+                                        Text(feedSideLabel(side))
                                     }
                                 }
                             }
                             // ── Live timer for breastfeeding ──
                             LiveTimer(
                                 label = "Breast",
+                                displayLabel = stringResource(R.string.feed_type_breast),
                                 alarmPresets = listOf(5, 10, 15, 20),
                                 remoteSession = remoteBreastSession,
                                 forceStopTick = forceStopBreast,
@@ -183,7 +201,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                         note = null
                                     )
                                     if (!saved) {
-                                        saveError = "No child selected — add a baby first"
+                                        saveError = context.getString(R.string.feed_error_no_child)
                                     }
                                     viewModel.onLocalTimerStopped("Breast")
                                 },
@@ -196,14 +214,14 @@ fun FeedScreen(viewModel: BabyViewModel) {
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "Or enter duration manually:",
+                                stringResource(R.string.feed_or_duration_manual),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             OutlinedTextField(
                                 value = durationText,
                                 onValueChange = { durationText = it.filter { c -> c.isDigit() } },
-                                label = { Text("Duration (minutes)") },
+                                label = { Text(stringResource(R.string.feed_duration_minutes)) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.fillMaxWidth()
@@ -219,7 +237,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 OutlinedTextField(
                                     value = amountText,
                                     onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
-                                    label = { Text("Amount") },
+                                    label = { Text(stringResource(R.string.feed_amount)) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier.weight(1f)
@@ -240,7 +258,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.feed_note)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -268,14 +286,14 @@ fun FeedScreen(viewModel: BabyViewModel) {
                                 durationText = ""
                                 noteText = ""
                             } else {
-                                saveError = "No child selected — add a baby first"
+                                saveError = context.getString(R.string.feed_error_no_child)
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Restaurant, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Log Feeding")
+                        Text(stringResource(R.string.feed_log_feeding))
                     }
                 }
             }
@@ -284,7 +302,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
         // ── Today's feedings header ────────────────────────
         item {
             Text(
-                "Today",
+                stringResource(R.string.feed_today),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 4.dp)
@@ -300,7 +318,7 @@ fun FeedScreen(viewModel: BabyViewModel) {
                     )
                 ) {
                     Text(
-                        "No feedings logged today",
+                        stringResource(R.string.feed_no_feedings_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -360,7 +378,7 @@ private fun FeedingCard(
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val displayAmount = when (feeding.type) {
         "breast" -> {
-            val side = feeding.breastSide?.replaceFirstChar { it.uppercase() } ?: ""
+            val side = feeding.breastSide?.let { feedSideLabel(it) } ?: ""
             val dur = feeding.duration?.let { Units.fmtAmount(it.toDouble(), "min") } ?: ""
             "$side · $dur"
         }
@@ -415,21 +433,21 @@ private fun FeedingCard(
                 IconButton(onClick = onEditTime) {
                     Icon(
                         Icons.Default.Edit,
-                        contentDescription = "Edit time",
+                        contentDescription = stringResource(R.string.feed_edit_time),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onEditFields) {
                     Icon(
                         Icons.Default.Tune,
-                        contentDescription = "Edit amount",
+                        contentDescription = stringResource(R.string.feed_edit_amount),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete",
+                        contentDescription = stringResource(R.string.feed_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

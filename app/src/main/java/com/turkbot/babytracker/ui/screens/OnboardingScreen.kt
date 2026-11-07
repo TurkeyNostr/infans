@@ -75,7 +75,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.StringRes
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.turkbot.babytracker.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -95,21 +98,21 @@ private enum class OnboardPage {
     WELCOME, ADD_CHILD, UNITS, CHOOSE_SYNC, SET_UP_KEY, PAIR_PARTNER, DONE
 }
 
-private enum class SyncMode(val label: String, val icon: ImageVector, val desc: String) {
+private enum class SyncMode(@StringRes val labelRes: Int, val icon: ImageVector, @StringRes val descRes: Int) {
     OFFLINE(
-        "Just This Phone",
+        R.string.onboarding_mode_offline,
         Icons.Filled.CloudOff,
-        "Data stays on this phone. No accounts, no internet. You can enable backup later."
+        R.string.onboarding_mode_offline_desc
     ),
     BACKUP(
-        "Auto-Backup",
+        R.string.onboarding_mode_backup,
         Icons.Filled.Key,
-        "Your data is encrypted and backed up automatically. Restore on a new phone with the same key."
+        R.string.onboarding_mode_backup_desc
     ),
     PAIR(
-        "Sync With Partner",
+        R.string.onboarding_mode_pair,
         Icons.Filled.People,
-        "Everything in Auto-Backup, plus automatic sync with the other parent's phone."
+        R.string.onboarding_mode_pair_desc
     )
 }
 
@@ -246,7 +249,7 @@ fun OnboardingScreen(
                                             page = if (syncMode == SyncMode.PAIR)
                                                 OnboardPage.PAIR_PARTNER else OnboardPage.DONE
                                         } else {
-                                            keyError = "Could not create a key — try again or skip"
+                                            keyError = context.getString(R.string.onboarding_key_error_generate)
                                         }
                                     }
                                 },
@@ -260,7 +263,7 @@ fun OnboardingScreen(
                                             page = if (syncMode == SyncMode.PAIR)
                                                 OnboardPage.PAIR_PARTNER else OnboardPage.DONE
                                         } else {
-                                            keyError = "Amber login failed — try again or skip"
+                                            keyError = context.getString(R.string.onboarding_key_error_amber)
                                         }
                                     }
                                 }
@@ -283,7 +286,7 @@ fun OnboardingScreen(
                                         partnerError = null
                                         val input = partnerInput.trim()
                                         if (input.isEmpty()) {
-                                            partnerError = "Enter an npub, NIP-05, or scan their QR"
+                                            partnerError = context.getString(R.string.onboarding_partner_error_empty)
                                             partnerBusy = false
                                             return@launch
                                         }
@@ -292,7 +295,7 @@ fun OnboardingScreen(
                                         if (success) {
                                             page = OnboardPage.DONE
                                         } else {
-                                            partnerError = "Could not resolve — check the identifier"
+                                            partnerError = context.getString(R.string.onboarding_partner_error_resolve)
                                         }
                                     }
                                 }
@@ -348,7 +351,7 @@ fun OnboardingScreen(
                     if (success) {
                         page = OnboardPage.DONE
                     } else {
-                        partnerError = "Could not resolve scanned QR — check with partner"
+                        partnerError = context.getString(R.string.onboarding_partner_error_qr)
                     }
                 }
             },
@@ -384,7 +387,7 @@ private fun OnboardingHeader(currentPage: OnboardPage, onSkip: () -> Unit) {
             }
         }
         TextButton(onClick = onSkip) {
-            Text("Skip all", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.onboarding_skip_all), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -423,7 +426,7 @@ private fun WelcomePage(onStart: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Track your baby's feedings, sleep, diapers, weight, and more.",
+            stringResource(R.string.onboarding_welcome_tagline),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -439,9 +442,9 @@ private fun WelcomePage(onStart: () -> Unit) {
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                PrivacyRow(Icons.Filled.Lock, "Your data stays on your phone")
-                PrivacyRow(Icons.Filled.CloudOff, "No accounts, no tracking, no cloud")
-                PrivacyRow(Icons.Filled.Done, "Works offline — sync is optional")
+                PrivacyRow(Icons.Filled.Lock, stringResource(R.string.onboarding_privacy_data))
+                PrivacyRow(Icons.Filled.CloudOff, stringResource(R.string.onboarding_privacy_no_accounts))
+                PrivacyRow(Icons.Filled.Done, stringResource(R.string.onboarding_privacy_offline))
             }
         }
         Spacer(Modifier.height(32.dp))
@@ -452,7 +455,7 @@ private fun WelcomePage(onStart: () -> Unit) {
                 containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Text("Get Started", fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.onboarding_get_started), fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(48.dp))
     }
@@ -485,13 +488,13 @@ private fun AddChildPage(
     onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Add Your Child", "Let's start with who we're tracking.")
+        PageHeader(stringResource(R.string.onboarding_add_child_title), stringResource(R.string.onboarding_add_child_subtitle))
         Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = name,
             onValueChange = onName,
-            label = { Text("Child's name") },
+            label = { Text(stringResource(R.string.onboarding_child_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -499,24 +502,24 @@ private fun AddChildPage(
         OutlinedTextField(
             value = dob,
             onValueChange = onDob,
-            label = { Text("Date of Birth (YYYY-MM-DD)") },
-            placeholder = { Text("Optional") },
+            label = { Text(stringResource(R.string.onboarding_dob_label)) },
+            placeholder = { Text(stringResource(R.string.onboarding_optional)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(12.dp))
-        Text("Gender (optional)", style = MaterialTheme.typography.labelMedium,
+        Text(stringResource(R.string.onboarding_gender_label), style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = gender == "boy",
                 onClick = { onGender(if (gender == "boy") "" else "boy") },
-                label = { Text("Boy") }
+                label = { Text(stringResource(R.string.onboarding_boy)) }
             )
             FilterChip(
                 selected = gender == "girl",
                 onClick = { onGender(if (gender == "girl") "" else "girl") },
-                label = { Text("Girl") }
+                label = { Text(stringResource(R.string.onboarding_girl)) }
             )
         }
 
@@ -525,7 +528,7 @@ private fun AddChildPage(
             onBack = onBack,
             onNext = onNext,
             nextEnabled = name.isNotBlank(),
-            nextLabel = "Next",
+            nextLabel = stringResource(R.string.onboarding_next),
             onSkip = onSkip
         )
     }
@@ -544,12 +547,12 @@ private fun UnitsPage(
     onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Measurement Units", "Choose how amounts and weights are displayed.")
+        PageHeader(stringResource(R.string.onboarding_measurement_units), stringResource(R.string.onboarding_units_subtitle))
         Spacer(Modifier.height(16.dp))
 
         val systems = listOf(
-            UnitPreferences.System.METRIC to "Metric (ml, kg, cm)",
-            UnitPreferences.System.IMPERIAL to "Imperial (fl oz, lb, in)"
+            UnitPreferences.System.METRIC to stringResource(R.string.settings_units_metric_full),
+            UnitPreferences.System.IMPERIAL to stringResource(R.string.settings_units_imperial_full)
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             systems.forEachIndexed { index, (value, label) ->
@@ -557,21 +560,21 @@ private fun UnitsPage(
                     selected = unitSystem == value,
                     onClick = { onSystem(value) },
                     shape = SegmentedButtonDefaults.itemShape(index, systems.size)
-                ) { Text(if (value == UnitPreferences.System.METRIC) "Metric" else "Imperial") }
+                ) { Text(if (value == UnitPreferences.System.METRIC) stringResource(R.string.settings_metric) else stringResource(R.string.settings_imperial)) }
             }
         }
         Spacer(Modifier.height(8.dp))
         Text(
             if (unitSystem == UnitPreferences.System.METRIC)
-                "Bottle amounts in ml, weight in kg, height in cm."
+                stringResource(R.string.onboarding_units_metric_desc)
             else
-                "Bottle amounts in fl oz, weight in lb, height in inches.",
+                stringResource(R.string.onboarding_units_imperial_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(Modifier.height(32.dp))
-        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next", onSkip = onSkip)
+        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = stringResource(R.string.onboarding_next), onSkip = onSkip)
     }
 }
 
@@ -588,7 +591,7 @@ private fun ChooseSyncPage(
     onSkip: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Sync Settings", "You can change this later in Settings.")
+        PageHeader(stringResource(R.string.onboarding_sync_title), stringResource(R.string.onboarding_sync_subtitle))
         Spacer(Modifier.height(16.dp))
 
         SyncMode.entries.forEach { mode ->
@@ -601,7 +604,7 @@ private fun ChooseSyncPage(
         }
 
         Spacer(Modifier.height(24.dp))
-        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = "Next", onSkip = onSkip)
+        NavButtons(onBack = onBack, onNext = onNext, nextEnabled = true, nextLabel = stringResource(R.string.onboarding_next), onSkip = onSkip)
     }
 }
 
@@ -635,7 +638,7 @@ private fun ModeCard(mode: SyncMode, selected: Boolean, onClick: () -> Unit) {
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    mode.label,
+                    stringResource(mode.labelRes),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
                     color = if (selected)
@@ -644,7 +647,7 @@ private fun ModeCard(mode: SyncMode, selected: Boolean, onClick: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    mode.desc,
+                    stringResource(mode.descRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (selected)
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -654,7 +657,7 @@ private fun ModeCard(mode: SyncMode, selected: Boolean, onClick: () -> Unit) {
             if (selected) {
                 Icon(
                     Icons.Filled.Done,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.onboarding_selected_cd),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
@@ -679,7 +682,7 @@ private fun SetUpKeyPage(
     onAmber: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Create Your Backup Key", "This encrypts your data so only you can access it.")
+        PageHeader(stringResource(R.string.onboarding_key_title), stringResource(R.string.onboarding_key_subtitle))
         Spacer(Modifier.height(16.dp))
 
         if (signerActive) {
@@ -696,7 +699,7 @@ private fun SetUpKeyPage(
                 ) {
                     Icon(Icons.Filled.Done, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Your key is ready.",
+                    Text(stringResource(R.string.onboarding_key_ready),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Medium)
@@ -727,17 +730,14 @@ private fun SetUpKeyPage(
                                 tint = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Text(
-                                "Keep Your Key Safe",
+                                stringResource(R.string.onboarding_key_safe_title),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                         Text(
-                            "This key is the only way to access your data. If you lose it, " +
-                                "your backup is gone forever — there is no password reset. " +
-                                "Write it down somewhere safe, or back up your phone regularly.\n\n" +
-                                "You can view and copy your key later in Settings → Nostr Identity.",
+                            stringResource(R.string.onboarding_key_safe_body),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -750,7 +750,7 @@ private fun SetUpKeyPage(
                 onBack = onBack,
                 onNext = onSkip,
                 nextEnabled = true,
-                nextLabel = "Continue"
+                nextLabel = stringResource(R.string.onboarding_continue)
             )
             return@Column
         }
@@ -778,14 +778,14 @@ private fun SetUpKeyPage(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Create a New Key",
+                        stringResource(R.string.onboarding_create_key),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "One tap. We'll generate a secure key for you automatically.",
+                        stringResource(R.string.onboarding_create_key_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -808,12 +808,12 @@ private fun SetUpKeyPage(
         ) {
             Icon(Icons.Filled.AccountCircle, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text(if (hasAmber) "Use Amber App Instead" else "Use Amber (Install Required)")
+            Text(if (hasAmber) stringResource(R.string.onboarding_use_amber) else stringResource(R.string.onboarding_use_amber_install))
         }
         if (!hasAmber) {
             Spacer(Modifier.height(4.dp))
             Text(
-                "Amber keeps your key in a separate app. Install from zapstore.dev/apps/com.greenart7c3.amber",
+                stringResource(R.string.onboarding_amber_install_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -831,9 +831,9 @@ private fun SetUpKeyPage(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
-                Text("Back")
+                Text(stringResource(R.string.onboarding_back))
             }
-            TextButton(onClick = onSkip) { Text("Skip for now") }
+            TextButton(onClick = onSkip) { Text(stringResource(R.string.onboarding_skip_for_now)) }
         }
     }
 }
@@ -854,7 +854,7 @@ private fun PairPartnerPage(
     onLink: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        PageHeader("Link With The Other Parent", "Scan their QR code, or enter their npub or NIP-05.")
+        PageHeader(stringResource(R.string.onboarding_pair_title), stringResource(R.string.onboarding_pair_subtitle))
         Spacer(Modifier.height(16.dp))
 
         if (partnerLinked) {
@@ -871,7 +871,7 @@ private fun PairPartnerPage(
                 ) {
                     Icon(Icons.Filled.Done, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Partner linked successfully.",
+                    Text(stringResource(R.string.onboarding_partner_linked),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Medium)
@@ -882,7 +882,7 @@ private fun PairPartnerPage(
                 onBack = onBack,
                 onNext = onSkip,
                 nextEnabled = true,
-                nextLabel = "Continue"
+                nextLabel = stringResource(R.string.onboarding_continue)
             )
             return@Column
         }
@@ -904,14 +904,14 @@ private fun PairPartnerPage(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Your QR Code",
+                        stringResource(R.string.onboarding_your_qr),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
                     com.turkbot.babytracker.ui.components.QrCodeDisplay(
                         content = identity,
-                        caption = "Have the other parent scan this in their Infans app."
+                        caption = stringResource(R.string.onboarding_qr_caption)
                     )
                 }
             }
@@ -926,12 +926,12 @@ private fun PairPartnerPage(
         ) {
             Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Scan Partner's QR")
+            Text(stringResource(R.string.onboarding_scan_qr))
         }
 
         Spacer(Modifier.height(16.dp))
         Text(
-            "Or enter manually:",
+            stringResource(R.string.onboarding_or_manual),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -939,8 +939,8 @@ private fun PairPartnerPage(
         OutlinedTextField(
             value = input,
             onValueChange = onInput,
-            label = { Text("npub or NIP-05") },
-            placeholder = { Text("npub1... or name@domain.com") },
+            label = { Text(stringResource(R.string.onboarding_npub_label)) },
+            placeholder = { Text(stringResource(R.string.onboarding_partner_placeholder)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -956,9 +956,9 @@ private fun PairPartnerPage(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
-                Text("Back")
+                Text(stringResource(R.string.onboarding_back))
             }
-            TextButton(onClick = onSkip) { Text("Skip for now") }
+            TextButton(onClick = onSkip) { Text(stringResource(R.string.onboarding_skip_for_now)) }
             Button(
                 onClick = onLink,
                 enabled = !busy,
@@ -969,7 +969,7 @@ private fun PairPartnerPage(
                         modifier = Modifier.size(16.dp), strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Link")
+                    Text(stringResource(R.string.onboarding_link))
                 }
             }
         }
@@ -1006,7 +1006,7 @@ private fun DonePage(
             }
         }
         Spacer(Modifier.height(16.dp))
-        Text("You're all set!", style = MaterialTheme.typography.headlineMedium,
+        Text(stringResource(R.string.onboarding_all_set), style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
 
@@ -1020,27 +1020,27 @@ private fun DonePage(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Quick Tips", style = MaterialTheme.typography.titleMedium,
+                Text(stringResource(R.string.onboarding_quick_tips), style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium)
                 HorizontalDivider()
-                TipRow(Icons.Filled.Restaurant, "Use the Feed tab to log bottle, breast, or solid feedings.")
-                TipRow(Icons.Filled.BabyChangingStation, "Diaper, pumping, health, and vaccines are on the Home screen.")
+                TipRow(Icons.Filled.Restaurant, stringResource(R.string.onboarding_tip_feed))
+                TipRow(Icons.Filled.BabyChangingStation, stringResource(R.string.onboarding_tip_home))
                 TipRow(Icons.Filled.People, if (partnerLinked)
-                    "Notes you leave will appear on the other parent's phone."
+                    stringResource(R.string.onboarding_tip_notes_linked)
                 else
-                    "Notes are a quick way to remember things about your baby.")
+                    stringResource(R.string.onboarding_tip_notes))
                 TipRow(Icons.Filled.Done, if (syncMode == SyncMode.OFFLINE)
-                    "To enable backup or partner sync later, go to Settings."
+                    stringResource(R.string.onboarding_tip_sync_later)
                 else if (signerActive)
-                    "Data syncs automatically after each entry."
+                    stringResource(R.string.onboarding_tip_syncs)
                 else
-                    "Set up your backup key in Settings to start syncing.")
+                    stringResource(R.string.onboarding_tip_backup_key))
             }
         }
 
         Spacer(Modifier.height(32.dp))
         Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) {
-            Text("Start Using Infans", fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.onboarding_start_using), fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -1085,10 +1085,10 @@ private fun NavButtons(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
-            Text("Back")
+            Text(stringResource(R.string.onboarding_back))
         }
         if (onSkip != null) {
-            TextButton(onClick = onSkip) { Text("Skip") }
+            TextButton(onClick = onSkip) { Text(stringResource(R.string.onboarding_skip)) }
         }
         Button(
             onClick = onNext,

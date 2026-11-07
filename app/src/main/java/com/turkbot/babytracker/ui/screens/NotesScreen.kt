@@ -27,7 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.Note
 import com.turkbot.babytracker.nostr.NostrManager
 import com.turkbot.babytracker.ui.viewmodel.BabyViewModel
@@ -60,10 +62,10 @@ fun NotesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("No Nostr Identity", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.notes_no_identity), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Generate a Nostr key in Settings to enable shared notes with the other parent.",
+                stringResource(R.string.notes_no_identity_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -84,8 +86,7 @@ fun NotesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
             if (notes.isEmpty()) {
                 item {
                     Text(
-                        "No notes yet. Leave a note for the other parent about feedings, " +
-                            "sleep, or anything worth remembering.",
+                        stringResource(R.string.notes_empty),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -117,7 +118,7 @@ fun NotesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Leave a note...") },
+                    placeholder = { Text(stringResource(R.string.notes_hint)) },
                     modifier = Modifier.weight(1f),
                     maxLines = 4,
                     shape = MaterialTheme.shapes.large
@@ -133,7 +134,7 @@ fun NotesScreen(viewModel: BabyViewModel, nostrManager: NostrManager) {
                         }
                     }
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Add")
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.notes_add_cd))
                 }
             }
         }
@@ -164,7 +165,7 @@ private fun NoteCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (isMine) "You" else "Partner",
+                    if (isMine) stringResource(R.string.notes_you) else stringResource(R.string.notes_partner),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium,
                     color = if (isMine)
@@ -201,13 +202,13 @@ private fun NoteCard(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.notes_delete),
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "Delete",
+                            stringResource(R.string.notes_delete),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                         )

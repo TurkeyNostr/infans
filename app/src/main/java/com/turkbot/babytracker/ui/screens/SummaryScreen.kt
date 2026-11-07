@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.turkbot.babytracker.R
 import com.turkbot.babytracker.data.entities.*
 import com.turkbot.babytracker.ui.components.BarChart
 import com.turkbot.babytracker.ui.components.EditTimestampDialog
@@ -98,6 +100,7 @@ fun SummaryScreen(
     val lastFeeding = feedings.maxByOrNull { it.time }
     val lastSleep = sleeps.maxByOrNull { it.start }
     val lastDiaper = diapers.maxByOrNull { it.time }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val todayDiapers = diapers.filter { d ->
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(d.time)) == today
@@ -107,10 +110,10 @@ fun SummaryScreen(
     fun timeAgo(time: Long): String {
         val mins = ((System.currentTimeMillis() - time) / 60000).toInt()
         return when {
-            mins < 1 -> "just now"
-            mins < 60 -> "${mins}m ago"
-            mins < 1440 -> "${mins / 60}h ${mins % 60}m ago"
-            else -> "${mins / 1440}d ago"
+            mins < 1 -> context.getString(R.string.summary_just_now)
+            mins < 60 -> context.getString(R.string.summary_minutes_ago, mins)
+            mins < 1440 -> context.getString(R.string.summary_hours_minutes_ago, mins / 60, mins % 60)
+            else -> context.getString(R.string.summary_days_ago, mins / 1440)
         }
     }
 
@@ -180,7 +183,7 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        child?.name ?: "No child selected",
+                        child?.name ?: stringResource(R.string.summary_no_child_selected),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold
@@ -188,7 +191,7 @@ fun SummaryScreen(
                     if (child?.dob != null) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Age: ${Units.ageFromDOB(child!!.dob)}",
+                            stringResource(R.string.summary_age, Units.ageFromDOB(child!!.dob)),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
                         )
@@ -203,7 +206,7 @@ fun SummaryScreen(
                                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    "Switch child ▾",
+                                    stringResource(R.string.summary_switch_child),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                                 )
@@ -239,25 +242,25 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Last Activity",
+                        stringResource(R.string.summary_last_activity),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                     LastActivityRow(
                         icon = Icons.Default.Restaurant,
-                        label = "Last Feeding",
+                        label = stringResource(R.string.summary_last_feeding),
                         value = lastFeeding?.let { "${Units.feedTypeLabel(it.type)} · ${timeAgo(it.time)}" } ?: "—",
                         iconTint = MaterialTheme.colorScheme.primary
                     )
                     LastActivityRow(
                         icon = Icons.Default.Bedtime,
-                        label = "Last Sleep",
+                        label = stringResource(R.string.summary_last_sleep),
                         value = lastSleep?.let { "${Units.fmtDuration(it.duration)} · ${timeAgo(it.start)}" } ?: "—",
                         iconTint = MaterialTheme.colorScheme.tertiary
                     )
                     LastActivityRow(
                         icon = Icons.Default.Spa,
-                        label = "Last Diaper",
+                        label = stringResource(R.string.summary_last_diaper),
                         value = lastDiaper?.let { "${it.contents.replaceFirstChar { c -> c.uppercase() }} · ${timeAgo(it.time)}" } ?: "—",
                         iconTint = MaterialTheme.colorScheme.secondary
                     )
@@ -276,7 +279,7 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Today's Totals",
+                        stringResource(R.string.summary_todays_totals),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -295,11 +298,11 @@ fun SummaryScreen(
 
                     TotalsRow(
                         icon = Icons.Default.Restaurant,
-                        label = "Feedings",
+                        label = stringResource(R.string.summary_feedings),
                         value = if (todayFeedings.isEmpty()) "—" else {
                             val parts = mutableListOf<String>()
-                            if (totalMl > 0) parts.add("${totalMl.toInt()} ml")
-                            if (totalBreastMin > 0) parts.add("${totalBreastMin} min breast")
+                            if (totalMl > 0) parts.add(stringResource(R.string.summary_total_ml, totalMl.toInt()))
+                            if (totalBreastMin > 0) parts.add(stringResource(R.string.summary_total_breast_min, totalBreastMin))
                             if (parts.isEmpty()) "${todayFeedings.size} session${if (todayFeedings.size > 1) "s" else ""}"
                             else parts.joinToString(" · ")
                         },
@@ -307,13 +310,13 @@ fun SummaryScreen(
                     )
                     TotalsRow(
                         icon = Icons.Default.Bedtime,
-                        label = "Sleep",
+                        label = stringResource(R.string.summary_sleep),
                         value = if (totalSleepMin > 0) Units.fmtDuration(totalSleepMin) else "—",
                         iconTint = MaterialTheme.colorScheme.tertiary
                     )
                     TotalsRow(
                         icon = Icons.Default.Spa,
-                        label = "Diapers",
+                        label = stringResource(R.string.summary_diapers),
                         value = if (totalDiapers > 0) "$totalDiapers" else "—",
                         iconTint = MaterialTheme.colorScheme.secondary
                     )
@@ -329,19 +332,19 @@ fun SummaryScreen(
             ) {
                 QuickActionCard(
                     icon = Icons.Default.Bathtub,
-                    label = "Bath",
+                    label = stringResource(R.string.summary_bath),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToBath
                 )
                 QuickActionCard(
                     icon = Icons.Default.ShowChart,
-                    label = "Charts",
+                    label = stringResource(R.string.summary_charts),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToCharts
                 )
                 QuickActionCard(
                     icon = Icons.Default.EmojiEvents,
-                    label = "Milestones",
+                    label = stringResource(R.string.summary_milestones),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToMilestones
                 )
@@ -354,19 +357,19 @@ fun SummaryScreen(
             ) {
                 QuickActionCard(
                     icon = Icons.Default.Spa,
-                    label = "Diaper",
+                    label = stringResource(R.string.summary_diaper),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToDiaper
                 )
                 QuickActionCard(
                     icon = Icons.Default.WaterDrop,
-                    label = "Pumping",
+                    label = stringResource(R.string.summary_pumping),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToPumping
                 )
                 QuickActionCard(
                     icon = Icons.Default.HealthAndSafety,
-                    label = "Health",
+                    label = stringResource(R.string.summary_health),
                     modifier = Modifier.weight(1f),
                     onClick = onNavigateToHealth
                 )
@@ -381,14 +384,14 @@ fun SummaryScreen(
             ) {
                 StatCard(
                     icon = Icons.Default.Restaurant,
-                    label = "Feedings Today",
+                    label = stringResource(R.string.summary_feedings_today),
                     value = todayFeedings.size.toString(),
                     modifier = Modifier.weight(1f),
                     iconTint = MaterialTheme.colorScheme.primary
                 )
                 StatCard(
                     icon = Icons.Default.Bedtime,
-                    label = "Sleep Today",
+                    label = stringResource(R.string.summary_sleep_today),
                     value = Units.fmtDuration(
                         todaySleeps
                             .groupBy { Triple(it.duration, it.start / 600_000L, it.childId) }
@@ -407,14 +410,14 @@ fun SummaryScreen(
             ) {
                 StatCard(
                     icon = Icons.Default.Spa,
-                    label = "Diapers Today",
+                    label = stringResource(R.string.summary_diapers_today),
                     value = todayDiapers.size.toString(),
                     modifier = Modifier.weight(1f),
                     iconTint = MaterialTheme.colorScheme.secondary
                 )
                 StatCard(
                     icon = Icons.Default.WaterDrop,
-                    label = "Pumping Today",
+                    label = stringResource(R.string.summary_pumping_today),
                     value = pumpings.count { p ->
                         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(p.time)) == today
                     }.toString(),
@@ -435,12 +438,12 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Feeding Trend",
+                        stringResource(R.string.summary_feeding_trend),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "feedings per day",
+                        stringResource(R.string.summary_feedings_per_day),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -465,12 +468,12 @@ fun SummaryScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Sleep Trend",
+                        stringResource(R.string.summary_sleep_trend),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "hours per day",
+                        stringResource(R.string.summary_hours_per_day),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -487,7 +490,7 @@ fun SummaryScreen(
         // ── Today's activity list ──────────────────────────
         item {
             Text(
-                "Today's Activity",
+                stringResource(R.string.summary_todays_activity),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 4.dp)
@@ -503,7 +506,7 @@ fun SummaryScreen(
                     )
                 ) {
                     Text(
-                        "No activity logged today",
+                        stringResource(R.string.summary_no_activity_today),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -527,7 +530,7 @@ fun SummaryScreen(
                 val sleepEnd = s.start + s.duration * 60_000L
                 ActivityRow(
                     icon = Icons.Default.Bedtime,
-                    title = "Sleep · ${Units.fmtDuration(s.duration)}",
+                    title = stringResource(R.string.summary_sleep_duration, Units.fmtDuration(s.duration)),
                     subtitle = "${timeFmt.format(Date(s.start))} - ${timeFmt.format(Date(sleepEnd))}",
                     onDelete = { viewModel.deleteSleep(s.id) },
                     onEditTime = { editingSleep = s },
@@ -754,11 +757,11 @@ private fun ActivityRow(
             }
             if (onEditTime != null) {
                 IconButton(onClick = onEditTime) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit time", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.summary_edit_time), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.summary_delete), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
