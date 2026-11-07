@@ -1081,9 +1081,22 @@ class NostrManager(context: Context) {
             val remote = if (isSleep) _remoteSleepSession.value else _remoteBreastSession.value
             val localId = if (isSleep) localSleepSessionId else localBreastSessionId
             val localStartMs = if (isSleep) localSleepSessionStartMs else localBreastSessionStartMs
+            // A local timer can also survive in live_timer_prefs after an app
+            // restart (by design — timers resurrect). Its persisted start must
+            // take part in the stale-replay guard too, or a resurrected timer
+            // started AFTER an old session_ended event would be wrongly killed
+            // by that event's replay on reconnect.
+            val prefLabel = if (isSleep) "Sleep" else "Breast"
+            val prefsStartMs = try {
+                appContext.getSharedPreferences("live_timer_prefs", Context.MODE_PRIVATE)
+                    .getLong("start_$prefLabel", 0L)
+            } catch (e: Exception) {
+                0L
+            }
             val sessionStartMs = listOfNotNull(
                 remote?.startTime,
-                if (localId != null) localStartMs else null
+                if (localId != null) localStartMs else null,
+                if (prefsStartMs > 0L) prefsStartMs else null
             ).maxOrNull()
             if (sessionStartMs != null && eventMs < sessionStartMs - CLOCK_SKEW_TOLERANCE_MS) {
                 Dbg.info(
@@ -1104,25 +1117,39 @@ class NostrManager(context: Context) {
                 // If we started this session locally, the partner just stopped
                 // it.  Signal the local LiveTimer to stop WITHOUT creating a
                 // record (the partner already logged one in onRemoteTimerStopped).
-                if (localSleepSessionId != null) {
+                //
+                // localSleepSessionId is in-memory only: after an app restart a
+                // running timer resurrects from live_timer_prefs with the ID
+                // tracker empty. Detect that case via the persisted start, or
+                // the resurrected timer would run forever while the partner's
+                // phone says the session is over (the "ghost timer" bug).
+                if (localSleepSessionId != null || prefsStartMs > 0L) {
+                    if (localSleepSessionId != null) {
+                        _forceStopSleep.value = _forceStopSleep.value + 1
+                        Dbg.info(Cat.SYNC, "Partner stopped our Sleep session — force-stopping local timer")
+                    } else {
+                        Dbg.info(Cat.SYNC, "Partner stopped our Sleep session — clearing resurrected timer from prefs")
+                    }
                     localSleepSessionId = null
                     localSleepSessionStartMs = 0L
-                    _forceStopSleep.value = _forceStopSleep.value + 1
                     // Also clear the persisted timer state directly — the Sleep
                     // screen may not be composed (user on another tab), in which
                     // case the forceStopTick effect never runs and the timer
                     // would resurrect from prefs on the next tab visit.
                     clearTimerPrefs("Sleep")
-                    Dbg.info(Cat.SYNC, "Partner stopped our Sleep session — force-stopping local timer")
                 }
             } else {
                 _remoteBreastSession.value = null
-                if (localBreastSessionId != null) {
+                if (localBreastSessionId != null || prefsStartMs > 0L) {
+                    if (localBreastSessionId != null) {
+                        _forceStopBreast.value = _forceStopBreast.value + 1
+                        Dbg.info(Cat.SYNC, "Partner stopped our Breast session — force-stopping local timer")
+                    } else {
+                        Dbg.info(Cat.SYNC, "Partner stopped our Breast session — clearing resurrected timer from prefs")
+                    }
                     localBreastSessionId = null
                     localBreastSessionStartMs = 0L
-                    _forceStopBreast.value = _forceStopBreast.value + 1
                     clearTimerPrefs("Breast")
-                    Dbg.info(Cat.SYNC, "Partner stopped our Breast session — force-stopping local timer")
                 }
             }
             Dbg.info(Cat.SYNC, "Remote session ended: ${if (isSleep) "Sleep" else "Breast"}")
@@ -1209,7 +1236,18 @@ class NostrManager(context: Context) {
         }
 
         amberMutex.withLock {
-            backupService.endSession(label, signer, partnerHex)
+            val ok = backupService.endSession(label, signer, partnerHex)
+            if (!ok) {
+                // The partner never learns this session ended — their phone
+                // would show a ghost timer indefinitely. Retry once after a
+                // short delay (relay hiccup), then log loudly.
+                Dbg.warn(Cat.SYNC, "session_ended publish failed for $label — retrying once")
+                kotlinx.coroutines.delay(3_000)
+                val retry = backupService.endSession(label, signer, partnerHex)
+                if (!retry) {
+                    Dbg.warn(Cat.SYNC, "session_ended publish RETRY FAILED for $label — partner may show a ghost timer until reconnect")
+                }
+            }
         }
     }
 
